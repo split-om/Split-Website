@@ -1,0 +1,131 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #111113;
+}
+
+@theme inline {
+  --color-background: #ffffff;
+  --color-foreground: #111113;
+  --color-ink: #111113;
+  --color-muted: #5c5c66;
+  --color-line: #ececef;
+  --color-split: #5b21b6;
+  --color-split-bright: #7c3aed;
+  --color-lilac: #f4f0ff;
+  --color-lilac-deep: #ede9fe;
+  --color-sand: #f7f6f3;
+  --font-sans: var(--font-plus-jakarta);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #ffffff;
+  color: #111113;
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
+}
+
+::selection {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.marquee-track {
+  animation: marquee 32s linear infinite;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.fade-slide {
+  animation: fadeSlide 0.7s ease both;
+}
+
+@keyframes fadeSlide {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.float-slow {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.guest-shell {
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background:
+    linear-gradient(180deg, rgba(17, 17, 19, 0.72), rgba(17, 17, 19, 0.88)),
+    url("/images/hero-1.jpg") center / cover no-repeat;
+}
+
+@keyframes scan-line {
+  0%,
+  100% {
+    top: 18%;
+  }
+  50% {
+    top: 72%;
+  }
+}
+
+.scan-line {
+  animation: scan-line 2.4s ease-in-out infinite;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.pop-in {
+  animation: pop-in 0.45s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+@media print {
+  .print\:hidden {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}

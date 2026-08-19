@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 32" fill="none">
+  <path d="M9.1 2.4c1.15-.42 2.42.18 2.84 1.33l6.6 18.2c.42 1.15-.18 2.42-1.33 2.84-1.15.42-2.42-.18-2.84-1.33l-6.6-18.2C7.35 4.09 7.95 2.82 9.1 2.4Z" fill="#7C3AED"/>
+  <path d="M18.4 6.1c1.15-.42 2.42.18 2.84 1.33l6.6 18.2c.42 1.15-.18 2.42-1.33 2.84-1.15.42-2.42-.18-2.84-1.33l-6.6-18.2c-.42-1.15.18-2.42 1.33-2.84Z" fill="#7C3AED"/>
+  <text x="42" y="24" fill="#2A1248" font-family="system-ui, 'Plus Jakarta Sans', sans-serif" font-size="22" font-weight="800" letter-spacing="-0.8">Split</text>
+</svg>
