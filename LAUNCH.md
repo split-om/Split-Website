@@ -1,22 +1,25 @@
 # Test launch (Vercel + Neon)
 
-You do the accounts. Split is already wired: if `DATABASE_URL` is set, everything is saved in Neon. If it is not set, this laptop still uses the local file (demo only).
+Live site: https://split-website-v86m.vercel.app/
 
-## 1. Neon (the notebook)
+Split is already wired: if `DATABASE_URL` (or `POSTGRES_URL`) is set, everything is saved in Neon. If it is not set, this laptop still uses the local file (demo only).
 
-1. Sign up at https://neon.tech (GitHub login is fine) **or** add Neon from the Vercel Marketplace.
-2. Create a project on the **Free** plan.
-3. Copy the connection string (looks like `postgresql://...`).
+## 1. Add Neon on the live Vercel project (easiest)
 
-## 2. Vercel (the always-on computer)
+1. Open the **v86m** project on Vercel (the one whose Visit link is `split-website-v86m.vercel.app`).
+2. Open **Storage** → **Create Database** → **Neon** → Free plan → Create.
+3. Vercel adds `DATABASE_URL` for you.
+4. **Deployments** → latest → **⋯** → **Redeploy** (needed so the site picks up the notebook).
 
-1. https://vercel.com → **Add New** → **Project** → import `split-om/Split-Website`.
-2. Framework: Next.js. Root: leave default.
-3. **Settings → Environment Variables** → add:
+### Or create Neon yourself
 
-   `DATABASE_URL` = the Neon string (Production + Preview).
+1. https://neon.tech → sign up with GitHub → New project → Free.
+2. Copy the connection string (`postgresql://...`).
+3. Vercel project → **Settings → Environment Variables**.
+4. Name: `DATABASE_URL`. Value: paste the string. Environments: Production **and** Preview.
+5. Save, then **Redeploy**.
 
-4. Deploy. You get a free URL like `https://split-website.vercel.app`.
+Check: https://split-website-v86m.vercel.app/api/health should show `"db": true`.
 
 ## 3. What to test on that URL
 

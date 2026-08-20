@@ -3,12 +3,16 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 let sql: NeonQueryFunction<false, false> | null = null;
 let migrated = false;
 
+export function databaseUrl() {
+  return process.env.DATABASE_URL?.trim() || process.env.POSTGRES_URL?.trim() || "";
+}
+
 export function useDb() {
-  return Boolean(process.env.DATABASE_URL?.trim());
+  return Boolean(databaseUrl());
 }
 
 export function getSql() {
-  const url = process.env.DATABASE_URL?.trim();
+  const url = databaseUrl();
   if (!url) return null;
   if (!sql) sql = neon(url);
   return sql;
