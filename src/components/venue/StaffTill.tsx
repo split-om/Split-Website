@@ -22,8 +22,8 @@ type TableMeta = {
 type Floor = "lock" | "tables" | "ticket";
 
 function tableStatus(meta?: TableMeta): "empty" | "open" | "paid" {
+  if (meta && meta.paidBaisa > 0 && meta.remaining <= 0) return "paid";
   if (!meta?.hasCheck) return "empty";
-  if (meta.hasCheck && meta.paidBaisa > 0 && meta.remaining <= 0) return "paid";
   return "open";
 }
 
@@ -67,6 +67,7 @@ export function StaffTill({
   const [tables, setTables] = useState<Record<string, TableMeta>>(initialTables ?? {});
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [posAsk, setPosAsk] = useState(false);
   const [clock, setClock] = useState("");
   const [showInstall, setShowInstall] = useState(false);
 
@@ -149,6 +150,7 @@ export function StaffTill({
   function openTable(number: string) {
     setTable(number);
     setMsg("");
+    setPosAsk(false);
     setDigits("");
     setMode("menu");
     const code = tablePayCode(venue, venue.tables.find((t) => t.number === number)!);
@@ -223,6 +225,30 @@ export function StaffTill({
     setLines([]);
     setDigits("");
     setMsg("Check cleared");
+    refresh();
+  }
+
+  async function takeOnPos() {
+    if (!table || busy) return;
+    setBusy(true);
+    setMsg("");
+    const res = await fetch("/api/till", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "pos", slug: venue.slug, table }),
+    });
+    const data = (await res.json()) as { error?: string; amountBaisa?: number };
+    setBusy(false);
+    setPosAsk(false);
+    if (!res.ok) {
+      setMsg(data.error || "Could not mark as paid.");
+      return;
+    }
+    setLines([]);
+    setDigits("");
+    setMsg(
+      `Paid on bank POS${data.amountBaisa != null ? ` · ${formatOMRLabel(data.amountBaisa)}` : ""}. Table ${table} is cleared.`,
+    );
     refresh();
   }
 
@@ -509,12 +535,54 @@ export function StaffTill({
           >
             {busy ? "Sending…" : "Send to guest QR"}
           </button>
+          {meta && meta.remaining > 0 ? (
+            <button
+              type="button"
+              onClick={() => setPosAsk(true)}
+              disabled={busy}
+              className="mt-2 w-full rounded-full bg-white py-3 text-sm font-extrabold text-ink disabled:opacity-40"
+            >
+              Pay the rest on bank POS · {formatOMRLabel(meta.remaining)}
+            </button>
+          ) : null}
           <button type="button" onClick={clear} className="mt-2 w-full py-2 text-xs font-semibold text-white/35">
             Clear check
           </button>
           {msg ? <p className="mt-2 text-center text-sm font-semibold text-emerald-300">{msg}</p> : null}
         </aside>
       </div>
+
+      {posAsk && table && meta ? (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-[1.6rem] bg-[#16141c] p-5">
+            <p className="text-xs font-bold uppercase tracking-wider text-violet-300">Bank POS</p>
+            <h2 className="mt-1 text-xl font-extrabold">Take the rest on the card machine?</h2>
+            <p className="mt-2 text-sm text-white/60">
+              Table {table} still owes <strong className="text-white">{formatOMRLabel(meta.remaining)}</strong>. Put
+              this amount on the bank POS. Confirm only after the machine says approved. That clears the bill and
+              marks it paid.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setPosAsk(false)}
+                className="flex-1 rounded-full bg-white/10 py-3 text-sm font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void takeOnPos()}
+                className="flex-1 rounded-full bg-violet-500 py-3 text-sm font-extrabold"
+              >
+                {busy ? "Saving…" : "Confirm — taken on POS"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -526,7 +594,7 @@ function TillBar({ venue, clock, onEnd }: { venue: VenueProfile; clock: string; 
         <Mark />
         <div>
           <p className="text-sm font-extrabold leading-none">{venue.name}</p>
-          <p className="mt-1 text-[11px] text-white/40">{venue.server} on shift · no POS hookup</p>
+          <p className="mt-1 text-[11px] text-white/40">{venue.server} on shift · bank POS for the rest</p>
         </div>
       </div>
       <div className="flex items-center gap-3">

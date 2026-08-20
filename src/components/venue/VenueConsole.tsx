@@ -55,9 +55,12 @@ export function VenueConsole({
   const snapshots = useMemo(() => {
     return venue.tables.map((table) => {
       const code = tablePayCode(venue, table);
-      const bill = checks[code] ?? billForTable(table);
-      const session = bill ? (sessions[code] ?? emptySession(code)) : null;
-      return { table, bill, session, state: tableState(bill, session) };
+      const session = sessions[code] ?? emptySession(code);
+      const live = checks[code];
+      const posSettled = !live && session.payments.some((p) => p.method === "pos");
+      const bill = posSettled ? undefined : live ?? billForTable(table);
+      const state = posSettled ? "paid" : tableState(bill, bill ? session : null);
+      return { table, bill, session, state };
     });
   }, [venue, sessions, checks]);
 
@@ -153,7 +156,7 @@ export function VenueConsole({
 
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[1fr_360px]">
         <div>
-          <HowItWorks pos={venue.pos} />
+          <HowItWorks />
           {alerts.some((a) => !a.ack) ? (
             <div className="mb-4 space-y-2">
               {alerts
@@ -252,6 +255,17 @@ export function VenueConsole({
                   })
                   .catch(() => undefined);
               }}
+              onPosSettled={(code, session, tableNo, amountBaisa) => {
+                setChecks((cur) => {
+                  const next = { ...cur };
+                  delete next[code];
+                  return next;
+                });
+                setSessions((s) => ({ ...s, [code]: session }));
+                setToastKind("paid");
+                setToast(`Table ${tableNo} · Bank POS · ${formatOMRLabel(amountBaisa)}`);
+                window.setTimeout(() => setToast(""), 5000);
+              }}
             />
           ) : null}
         </aside>
@@ -277,15 +291,20 @@ function TablePanel({
   calls,
   onAck,
   onReset,
+  onPosSettled,
 }: {
   venue: VenueProfile;
   row: { table: FloorTable; bill?: VenueBill; session: TableSession | null; state: TableState };
   calls: StaffAlert[];
   onAck: (id: string) => void;
   onReset: (code: string) => void;
+  onPosSettled: (code: string, session: TableSession, table: string, amountBaisa: number) => void;
 }) {
   const { table, bill, session, state } = row;
   const [qr, setQr] = useState("");
+  const [posAsk, setPosAsk] = useState(false);
+  const [posBusy, setPosBusy] = useState(false);
+  const [posNote, setPosNote] = useState("");
 
   const payCode = bill?.code ?? tablePayCode(venue, table);
 
@@ -297,6 +316,50 @@ function TablePanel({
       color: { dark: "#111113", light: "#ffffff" },
     }).then(setQr);
   }, [payCode]);
+
+  async function takeOnPos() {
+    setPosBusy(true);
+    const res = await fetch("/api/till", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "pos", slug: venue.slug, table: table.number }),
+    });
+    const data = (await res.json()) as {
+      error?: string;
+      session?: TableSession;
+      amountBaisa?: number;
+      code?: string;
+    };
+    setPosBusy(false);
+    if (!res.ok || !data.session || data.amountBaisa == null || !data.code) {
+      setPosNote(data.error || "Could not mark as paid.");
+      setPosAsk(false);
+      return;
+    }
+    setPosAsk(false);
+    setPosNote(`Paid on bank POS. Table ${table.number} is cleared.`);
+    onPosSettled(data.code, data.session, table.number, data.amountBaisa);
+  }
+
+  if (state === "paid" && (!bill || !bill.items.length)) {
+    return (
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wider text-split">Table {table.number}</p>
+        <h3 className="text-2xl font-extrabold">Paid on bank POS</h3>
+        <p className="mt-2 text-sm text-muted">
+          The rest was taken on the bank card machine. This table is free for the next guests.
+        </p>
+        {posNote ? <p className="mt-3 text-sm font-semibold text-emerald-700">{posNote}</p> : null}
+        <button
+          type="button"
+          onClick={() => onReset(payCode)}
+          className="mt-4 text-xs font-semibold text-muted"
+        >
+          Ready for next guests
+        </button>
+      </div>
+    );
+  }
 
   if (!bill || !session) {
     return (
@@ -395,12 +458,24 @@ function TablePanel({
           <img src={qr} alt="" className="h-20 w-20 rounded-lg bg-white" />
           <div className="text-xs">
             <p className="font-bold">Table tent QR</p>
-            <p className="text-muted">Guest scans this. Staff never bring a card machine.</p>
+            <p className="text-muted">Guest scans this. Or take the rest on the bank POS.</p>
           </div>
         </div>
       ) : null}
 
       <div className="mt-4 flex flex-col gap-2">
+        {remaining > 0 ? (
+          <button
+            type="button"
+            onClick={() => {
+              setPosNote("");
+              setPosAsk(true);
+            }}
+            className="rounded-full bg-ink py-2.5 text-sm font-bold text-white"
+          >
+            Pay the rest on bank POS
+          </button>
+        ) : null}
         <Link
           href={`/pay/${bill.code}`}
           target="_blank"
@@ -417,12 +492,44 @@ function TablePanel({
         >
           Reset this table (demo)
         </button>
+        {posNote ? <p className="text-center text-sm font-semibold text-emerald-700">{posNote}</p> : null}
       </div>
+
+      {posAsk ? (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-ink/50 p-4">
+          <div className="w-full max-w-sm rounded-[1.6rem] bg-white p-5 shadow-xl">
+            <p className="text-xs font-bold uppercase tracking-wider text-split">Bank POS</p>
+            <h4 className="mt-1 text-xl font-extrabold">Take the rest on the card machine?</h4>
+            <p className="mt-2 text-sm text-muted">
+              Table {table.number} still owes <strong>{formatOMRLabel(remaining)}</strong>. Put this amount on the
+              bank POS. Tap confirm only after the machine says approved. That clears this bill and marks it paid.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                disabled={posBusy}
+                onClick={() => setPosAsk(false)}
+                className="flex-1 rounded-full bg-sand py-2.5 text-sm font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={posBusy}
+                onClick={() => void takeOnPos()}
+                className="flex-1 rounded-full bg-ink py-2.5 text-sm font-bold text-white"
+              >
+                {posBusy ? "Saving…" : "Confirm — taken on POS"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function HowItWorks({ pos }: { pos: string }) {
+function HowItWorks() {
   return (
     <div className="rounded-[1.4rem] bg-white p-4 text-sm">
       <p className="text-xs font-bold uppercase tracking-wider text-split">What you see vs the guest</p>
@@ -431,7 +538,7 @@ function HowItWorks({ pos }: { pos: string }) {
           ["1. Guest orders on the phone", "Scan table QR → pick food. Or you ring it on the till."],
           ["2. This tablet gets the ticket", "New order flashes. Kitchen / barista makes it."],
           ["3. They eat, then pay", "Same QR → split / tip → Apple Pay or pay you."],
-          ["4. This screen flashes Paid", `${pos} check closes. You don’t chase the machine.`],
+          ["4. This screen flashes Paid", `Guest pays on the phone, or you take the rest on the bank POS.`],
         ].map(([t, d]) => (
           <li key={t} className="rounded-2xl bg-sand p-3">
             <div className="font-extrabold">{t}</div>

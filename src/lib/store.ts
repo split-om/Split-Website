@@ -7,8 +7,8 @@ import type { StaffAlert } from "@/lib/staff-alerts";
 import type { JoinApplication } from "@/lib/join";
 import type { MenuItem } from "@/lib/menu";
 import type { StaffAccess } from "@/lib/staff-types";
-import { emptyBill, findPayTarget as catalogTarget, findVenue as catalogVenue, venues as catalog, tablePayCode, type VenueProfile } from "@/lib/venue";
-import { remainingBaisa } from "@/lib/pay-session";
+import { emptyBill, findPayTarget as catalogTarget, findVenue as catalogVenue, venues as catalog, tablePayCode, billForTable, type VenueProfile } from "@/lib/venue";
+import { remainingBaisa, remainingFee } from "@/lib/pay-session";
 
 export async function resolveVenue(slug: string): Promise<VenueProfile | undefined> {
   if (useDb()) return pg.getVenue(slug);
@@ -162,4 +162,38 @@ export async function getTillSnapshot(slug: string) {
 
 export function shellBill(venue: VenueProfile, table: { number: string; seats: number; billCode?: string }) {
   return emptyBill(venue, table);
+}
+
+/** Next sitting on a settled table starts a clean session. */
+export async function startFreshIfSettled(code: string) {
+  const bill = await getCheck(code);
+  const session = await getSession(code);
+  if (!bill || remainingBaisa(bill, session) <= 0) {
+    await resetStored(code);
+  }
+}
+
+export async function settleOnBankPos(slug: string, tableNumber: string) {
+  const venue = await resolveVenue(slug);
+  if (!venue) return { error: "Unknown café." };
+  const table = venue.tables.find((t) => t.number === tableNumber);
+  if (!table) return { error: "Unknown table." };
+  const code = tablePayCode(venue, table);
+  const bill = (await getCheck(code)) ?? billForTable(table);
+  if (!bill || !bill.items.length) return { error: "This table has no open bill." };
+  const session = await getSession(code);
+  const rem = remainingBaisa(bill, session);
+  if (rem <= 0) return { error: "This table is already paid." };
+  const leftoverFee = remainingFee(bill, session);
+  const next = await recordPayment(code, {
+    method: "pos",
+    billBaisa: rem,
+    foodBaisa: Math.max(0, rem - leftoverFee),
+    feeBaisa: leftoverFee,
+    tipBaisa: 0,
+    splitLabel: "Bank POS",
+    provider: "bank-pos",
+  });
+  await clearCheck(code);
+  return { ok: true as const, session: next, amountBaisa: rem, table: table.number, code };
 }

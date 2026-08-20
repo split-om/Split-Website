@@ -10,6 +10,8 @@ import {
   resolvePayTarget,
   resolveVenue,
   saveCheck,
+  settleOnBankPos,
+  startFreshIfSettled,
 } from "@/lib/store";
 import { emptyBill, tablePayCode } from "@/lib/venue";
 
@@ -50,6 +52,7 @@ export async function POST(request: Request) {
     const target = await resolvePayTarget(body.code);
     if (!target) return NextResponse.json({ error: "Unknown table." }, { status: 404 });
     const code = tablePayCode(target.venue, target.table);
+    await startFreshIfSettled(code);
     const base = (await getCheck(code)) ?? emptyBill(target.venue, target.table);
     const incoming = body.items
       .filter((i) => i.name.trim() && i.qty > 0 && i.omr > 0)
@@ -81,12 +84,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  if (body.action === "pos" && body.slug && body.table) {
+    const result = await settleOnBankPos(body.slug, body.table);
+    if ("error" in result) return NextResponse.json(result, { status: 400 });
+    return NextResponse.json(result);
+  }
+
   if (body.action === "save" && body.slug && body.table) {
     const venue = await resolveVenue(body.slug);
     if (!venue) return NextResponse.json({ error: "Unknown venue." }, { status: 404 });
     const table = venue.tables.find((t) => t.number === body.table);
     if (!table) return NextResponse.json({ error: "Unknown table." }, { status: 404 });
     const code = tablePayCode(venue, table);
+    await startFreshIfSettled(code);
 
     let items = (body.items ?? [])
       .filter((i) => i.name.trim() && i.qty > 0 && i.omr > 0)

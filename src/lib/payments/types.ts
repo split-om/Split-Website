@@ -1,4 +1,4 @@
-export type PaymentMethodId = "apple" | "google" | "card" | "restaurant";
+export type PaymentMethodId = "apple" | "google" | "card" | "restaurant" | "pos";
 
 export type PaymentProvider = "amwal";
 
