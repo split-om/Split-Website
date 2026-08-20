@@ -18,20 +18,20 @@ export async function POST(request: Request) {
   const me = await staffFromToken(token.trim());
   if (!me) return NextResponse.json({ error: "Sign in." }, { status: 401 });
   if (!me.access.menu) return NextResponse.json({ error: "You cannot edit the menu." }, { status: 403 });
-  const items: MenuItem[] = (body.items ?? [])
-    .filter((i) => i.name?.trim() && i.omr > 0)
-    .map((i, n) => {
-      const category: MenuItem["category"] =
-        i.category === "Food" || i.category === "Sweets" ? i.category : "Drinks";
-      return {
-        id: i.id?.trim() || `m${n}`,
-        name: i.name.trim(),
-        detail: i.detail?.trim() || undefined,
-        omr: Number(i.omr),
-        category,
-        photo: i.photo?.trim() || undefined,
-      };
+  const items: MenuItem[] = [];
+  for (const [n, i] of (body.items ?? []).entries()) {
+    if (!i.name?.trim() || !(i.omr > 0)) continue;
+    const category: MenuItem["category"] =
+      i.category === "Food" ? "Food" : i.category === "Sweets" ? "Sweets" : "Drinks";
+    items.push({
+      id: i.id?.trim() || `m${n}`,
+      name: i.name.trim(),
+      detail: i.detail?.trim() || undefined,
+      omr: Number(i.omr),
+      category,
+      photo: i.photo?.trim() || undefined,
     });
+  }
   await saveVenueMenu(me.slug, items);
   return NextResponse.json({ ok: true, items });
 }
