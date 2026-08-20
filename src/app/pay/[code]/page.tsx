@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { bills, findBill } from "@/lib/bills";
-import { emptyBill, findPayTarget } from "@/lib/venue";
+import { bills } from "@/lib/bills";
 import { PayLoader } from "@/components/pay/PayLoader";
+import { resolveBill } from "@/lib/store";
 
+export const dynamic = "force-dynamic";
 export const dynamicParams = true;
 
 export function generateStaticParams() {
@@ -15,12 +16,9 @@ export async function generateMetadata({
   params: Promise<{ code: string }>;
 }): Promise<Metadata> {
   const { code } = await params;
-  const bill = findBill(code);
-  const target = findPayTarget(code);
-  const name = bill?.venue ?? target?.venue.name;
-  const table = bill?.table ?? target?.table.number;
+  const bill = await resolveBill(code);
   return {
-    title: name && table ? `Table ${table} · ${name}` : "Your table",
+    title: bill ? `Table ${bill.table} · ${bill.venue}` : "Your table",
   };
 }
 
@@ -30,8 +28,6 @@ export default async function TablePayPage({
   params: Promise<{ code: string }>;
 }) {
   const { code } = await params;
-  const existing = findBill(code);
-  const target = findPayTarget(code);
-  const fallback = existing ?? (target ? emptyBill(target.venue, target.table) : undefined);
+  const fallback = await resolveBill(code);
   return <PayLoader code={code} fallback={fallback} />;
 }

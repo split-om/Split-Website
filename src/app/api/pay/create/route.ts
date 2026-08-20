@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { findBill } from "@/lib/bills";
 import { createCheckout } from "@/lib/payments";
 import type { PaymentMethodId } from "@/lib/payments";
+import { resolveBill } from "@/lib/store";
+
+export const dynamic = "force-dynamic";
 
 type Body = {
   code?: string;
@@ -14,7 +16,7 @@ type Body = {
 
 export async function POST(request: Request) {
   const body = (await request.json()) as Body;
-  const bill = body.code ? findBill(body.code) : undefined;
+  const bill = body.code ? await resolveBill(body.code) : undefined;
   if (!bill) {
     return NextResponse.json({ error: "Unknown table." }, { status: 404 });
   }

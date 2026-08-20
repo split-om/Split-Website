@@ -1,7 +1,7 @@
 import { useDb } from "@/lib/db";
 import * as file from "@/lib/sync-store";
 import * as pg from "@/lib/pg-store";
-import type { VenueBill } from "@/lib/bills";
+import { billFoodTotal, findBill, type VenueBill } from "@/lib/bills";
 import type { PayRecord } from "@/lib/pay-session";
 import type { StaffAlert } from "@/lib/staff-alerts";
 import type { JoinApplication } from "@/lib/join";
@@ -9,7 +9,6 @@ import type { MenuItem } from "@/lib/menu";
 import type { StaffAccess } from "@/lib/staff-types";
 import { emptyBill, findPayTarget as catalogTarget, findVenue as catalogVenue, venues as catalog, tablePayCode, type VenueProfile } from "@/lib/venue";
 import { remainingBaisa } from "@/lib/pay-session";
-import { billFoodTotal } from "@/lib/bills";
 
 export async function resolveVenue(slug: string): Promise<VenueProfile | undefined> {
   if (useDb()) return pg.getVenue(slug);
@@ -24,6 +23,15 @@ export async function listVenues(): Promise<VenueProfile[]> {
 export async function resolvePayTarget(code: string) {
   if (useDb()) return pg.findPayTarget(code);
   return catalogTarget(code);
+}
+
+/** Live café check, then a table from Neon/catalog, then the demo bill book. */
+export async function resolveBill(code: string): Promise<VenueBill | undefined> {
+  const live = await getCheck(code);
+  if (live) return live;
+  const target = await resolvePayTarget(code);
+  if (target) return emptyBill(target.venue, target.table);
+  return findBill(code);
 }
 
 export async function getCheck(code: string) {
