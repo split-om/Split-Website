@@ -3,13 +3,16 @@ import {
   ackStoredAlert,
   getAlerts,
   getSession,
+  getTillSnapshot,
   recordAlert,
   recordPayment,
   resetStored,
-} from "@/lib/sync-store";
+  resolveVenue,
+} from "@/lib/store";
 import type { PayRecord } from "@/lib/pay-session";
-import { findVenue, tablePayCode } from "@/lib/venue";
-import { getTillSnapshot } from "@/lib/till";
+import { tablePayCode } from "@/lib/venue";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -18,23 +21,23 @@ export async function GET(request: Request) {
 
   if (code) {
     return NextResponse.json({
-      session: getSession(code),
-      alerts: getAlerts().filter((a) => a.code === code && !a.ack),
+      session: await getSession(code),
+      alerts: (await getAlerts()).filter((a) => a.code === code && !a.ack),
     });
   }
 
   if (slug) {
-    const venue = findVenue(slug);
+    const venue = await resolveVenue(slug);
     if (!venue) return NextResponse.json({ error: "Unknown venue." }, { status: 404 });
-    const sessions: Record<string, ReturnType<typeof getSession>> = {};
+    const sessions: Record<string, Awaited<ReturnType<typeof getSession>>> = {};
     for (const table of venue.tables) {
-      const code = tablePayCode(venue, table);
-      sessions[code] = getSession(code);
+      const c = tablePayCode(venue, table);
+      sessions[c] = await getSession(c);
     }
-    const snap = getTillSnapshot(slug);
+    const snap = await getTillSnapshot(slug);
     return NextResponse.json({
       sessions,
-      alerts: getAlerts(venue.name),
+      alerts: await getAlerts(venue.name),
       checks: snap?.checks ?? {},
     });
   }
@@ -52,22 +55,22 @@ export async function POST(request: Request) {
   };
 
   if (body.action === "waiter" && body.code && body.alert) {
-    const alert = recordAlert({ ...body.alert, code: body.code });
+    const alert = await recordAlert({ ...body.alert, code: body.code });
     return NextResponse.json({ ok: true, alert });
   }
 
   if (body.action === "pay" && body.code && body.payment) {
-    const session = recordPayment(body.code, body.payment);
+    const session = await recordPayment(body.code, body.payment);
     return NextResponse.json({ ok: true, session });
   }
 
   if (body.action === "ack" && body.id) {
-    ackStoredAlert(body.id);
+    await ackStoredAlert(body.id);
     return NextResponse.json({ ok: true });
   }
 
   if (body.action === "reset" && body.code) {
-    const session = resetStored(body.code);
+    const session = await resetStored(body.code);
     return NextResponse.json({ ok: true, session });
   }
 

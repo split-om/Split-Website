@@ -1,14 +1,17 @@
 import Link from "next/link";
-import { venues } from "@/lib/venue";
 import { Logo } from "@/components/Logo";
+import { listVenues } from "@/lib/store";
 
-export default function VenueHomePage() {
+export const dynamic = "force-dynamic";
+
+export default async function VenueHomePage() {
+  const venues = await listVenues();
   return (
     <div className="mx-auto max-w-3xl px-4 py-16">
       <Logo />
       <h1 className="mt-8 text-4xl font-extrabold tracking-tight">Open a venue console</h1>
       <p className="mt-3 text-muted">
-        This is the staff tablet — not the guest phone. Pick a café to see tables, Foodics bills, and live payments.
+        This is the staff tablet — not the guest phone. Pick a café to sign in, edit the menu, and print table QRs.
       </p>
       <div className="mt-8 space-y-3">
         {venues.map((v) => (

@@ -14,9 +14,44 @@ import {
 export function ApplicationsClient() {
   const [apps, setApps] = useState<JoinApplication[]>([]);
 
+  const [note, setNote] = useState("");
+
   useEffect(() => {
-    setApps(loadApplications());
+    const local = loadApplications();
+    fetch("/api/hq")
+      .then((r) => r.json())
+      .then((d: { applications?: JoinApplication[] }) => {
+        const server = d.applications ?? [];
+        const byId = new Map<string, JoinApplication>();
+        for (const a of [...local, ...server]) byId.set(a.id, a);
+        setApps([...byId.values()].sort((a, b) => (a.submittedAt < b.submittedAt ? 1 : -1)));
+      })
+      .catch(() => setApps(local));
   }, []);
+
+  async function approve(id: string) {
+    setNote("");
+    const res = await fetch("/api/hq", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve", id }),
+    });
+    const data = (await res.json()) as {
+      error?: string;
+      slug?: string;
+      ownerName?: string;
+      password?: string;
+      tables?: number;
+    };
+    if (!res.ok) {
+      setNote(data.error || "Could not approve. Add DATABASE_URL (Neon) for a live café.");
+      return;
+    }
+    setNote(
+      `Approved. Staff login at /venue/${data.slug} — name ${data.ownerName}, password ${data.password}. ${data.tables} table QRs ready.`,
+    );
+    setApps((list) => list.map((a) => (a.id === id ? { ...a, status: "approved" as const } : a)));
+  }
 
   function wipe() {
     clearApplications();
@@ -29,7 +64,7 @@ export function ApplicationsClient() {
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-split">Internal test inbox</p>
           <h1 className="mt-2 text-4xl font-extrabold tracking-tight">Venue applications</h1>
-          <p className="mt-2 text-muted">What Split would see after a restaurant or café joins.</p>
+          <p className="mt-2 text-muted">Approve a café to create their staff login, menu, and table QRs.</p>
         </div>
         <div className="flex gap-2">
           <Link href="/join" className="rounded-full bg-split px-5 py-2.5 text-sm font-bold text-white">
@@ -42,6 +77,8 @@ export function ApplicationsClient() {
           ) : null}
         </div>
       </div>
+
+      {note ? <p className="mt-6 rounded-2xl bg-lilac px-4 py-3 text-sm font-semibold">{note}</p> : null}
 
       {apps.length === 0 ? (
         <div className="mt-12 rounded-[2rem] border border-dashed border-line px-6 py-16 text-center">
@@ -81,6 +118,13 @@ export function ApplicationsClient() {
               {app.notes ? <p className="mt-3 text-sm">{app.notes}</p> : null}
               <p className="mt-3 text-xs text-muted">{new Date(app.submittedAt).toLocaleString()}</p>
               <div className="mt-3 flex flex-wrap gap-4 text-sm font-semibold text-split">
+                {app.status !== "approved" ? (
+                  <button type="button" onClick={() => approve(app.id)} className="font-extrabold">
+                    Approve café →
+                  </button>
+                ) : (
+                  <Link href="/venue">Open staff consoles →</Link>
+                )}
                 <Link href={`/join/connect?id=${app.id}`}>Connect POS →</Link>
                 <Link href={`/pay/${posPlan(app.pos).guestTable}`}>Guest bill →</Link>
                 <Link href={`/join/success?id=${app.id}`}>Confirmation →</Link>

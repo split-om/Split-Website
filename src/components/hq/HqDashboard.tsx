@@ -25,6 +25,7 @@ type Snapshot = {
 
 export function HqDashboard() {
   const [data, setData] = useState<Snapshot | null>(null);
+  const [note, setNote] = useState("");
 
   useEffect(() => {
     const pull = () => {
@@ -52,8 +53,8 @@ export function HqDashboard() {
           <Link href="/hq/pos" className="rounded-full bg-violet-500 px-4 py-2 font-semibold text-white">
             POS lab
           </Link>
-          <Link href="/venue/qahwa" className="rounded-full border border-white/20 px-4 py-2 font-semibold">
-            Café console
+          <Link href="/venue" className="rounded-full border border-white/20 px-4 py-2 font-semibold">
+            Café consoles
           </Link>
           <Link href="/join/applications" className="rounded-full border border-white/20 px-4 py-2 font-semibold">
             Applications
@@ -131,12 +132,47 @@ export function HqDashboard() {
         </div>
         <div>
           <h2 className="text-lg font-extrabold">Pipeline</h2>
+          {note ? <p className="mt-2 text-xs font-semibold text-violet-200">{note}</p> : null}
           <ul className="mt-3 space-y-2">
             {(data?.applications ?? []).slice(0, 8).map((a) => (
               <li key={a.id} className="rounded-2xl border border-white/10 px-4 py-3 text-sm">
-                <div className="font-semibold">{a.venueName}</div>
-                <div className="text-xs text-white/45">
-                  {a.city} · {a.pos} · {a.status} · {a.id}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-semibold">{a.venueName}</div>
+                    <div className="text-xs text-white/45">
+                      {a.city} · {a.pos} · {a.status} · {a.id}
+                    </div>
+                  </div>
+                  {a.status !== "approved" ? (
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-full bg-violet-500 px-3 py-1 text-xs font-extrabold text-white"
+                      onClick={async () => {
+                        const res = await fetch("/api/hq", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "approve", id: a.id }),
+                        });
+                        const d = (await res.json()) as {
+                          error?: string;
+                          slug?: string;
+                          ownerName?: string;
+                          password?: string;
+                        };
+                        if (!res.ok) {
+                          setNote(d.error || "Need Neon DATABASE_URL to approve.");
+                          return;
+                        }
+                        setNote(`Live: /venue/${d.slug} · ${d.ownerName} / ${d.password}`);
+                      }}
+                    >
+                      Approve
+                    </button>
+                  ) : (
+                    <Link href="/venue" className="text-xs font-bold text-violet-200">
+                      Open
+                    </Link>
+                  )}
                 </div>
               </li>
             ))}

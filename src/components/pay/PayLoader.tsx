@@ -3,22 +3,30 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { VenueBill } from "@/lib/bills";
-import { emptyBill, findPayTarget } from "@/lib/venue";
+import { emptyBill, findPayTarget, type VenueProfile } from "@/lib/venue";
 import { PayApp } from "./PayApp";
 import { GuestFrame } from "./GuestFrame";
 
 export function PayLoader({ code, fallback }: { code: string; fallback?: VenueBill }) {
-  const target = findPayTarget(code);
-  const shell = target ? emptyBill(target.venue, target.table) : undefined;
-  const [bill, setBill] = useState<VenueBill | undefined>(fallback ?? shell);
+  const catalog = findPayTarget(code);
+  const [bill, setBill] = useState<VenueBill | undefined>(
+    fallback ?? (catalog ? emptyBill(catalog.venue, catalog.table) : undefined),
+  );
+  const [slug, setSlug] = useState(catalog?.venue.slug ?? "");
   const [tried, setTried] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/till?code=${encodeURIComponent(code)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { bill?: VenueBill } | null) => {
-        if (d?.bill) setBill(d.bill);
-        else if (shell) setBill(shell);
+    Promise.all([
+      fetch(`/api/till?code=${encodeURIComponent(code)}`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/venues?code=${encodeURIComponent(code)}`).then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([till, lookup]: [{ bill?: VenueBill } | null, { venue?: VenueProfile } | null]) => {
+        if (lookup?.venue) setSlug(lookup.venue.slug);
+        if (till?.bill) setBill(till.bill);
+        else if (lookup?.venue) {
+          const table = lookup.venue.tables.find((t) => `${lookup.venue!.slug}-${t.number}` === code || t.billCode === code);
+          if (table) setBill(emptyBill(lookup.venue, table));
+        }
         setTried(true);
       })
       .catch(() => setTried(true));
@@ -46,11 +54,5 @@ export function PayLoader({ code, fallback }: { code: string; fallback?: VenueBi
     );
   }
 
-  return (
-    <PayApp
-      key={bill.code}
-      bill={bill}
-      slug={target?.venue.slug ?? "qahwa"}
-    />
-  );
+  return <PayApp key={bill.code} bill={bill} slug={slug || "qahwa"} />;
 }

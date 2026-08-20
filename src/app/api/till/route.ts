@@ -1,22 +1,35 @@
 import { NextResponse } from "next/server";
 import type { VenueBill } from "@/lib/bills";
 import { omrToBaisa } from "@/lib/money";
-import { appendCheckItems, clearCheck, getCheck, saveCheck } from "@/lib/sync-store";
-import { recordAlert } from "@/lib/sync-store";
-import { getTillSnapshot } from "@/lib/till";
-import { emptyBill, findPayTarget, findVenue, tablePayCode } from "@/lib/venue";
+import {
+  appendCheckItems,
+  clearCheck,
+  getCheck,
+  getTillSnapshot,
+  recordAlert,
+  resolvePayTarget,
+  resolveVenue,
+  saveCheck,
+} from "@/lib/store";
+import { emptyBill, tablePayCode } from "@/lib/venue";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const slug = searchParams.get("venue");
   if (code) {
-    const bill = getCheck(code);
-    if (!bill) return NextResponse.json({ error: "No check." }, { status: 404 });
+    const bill = await getCheck(code);
+    if (!bill) {
+      const target = await resolvePayTarget(code);
+      if (target) return NextResponse.json({ bill: emptyBill(target.venue, target.table), empty: true });
+      return NextResponse.json({ error: "No check." }, { status: 404 });
+    }
     return NextResponse.json({ bill });
   }
   if (slug) {
-    const snap = getTillSnapshot(slug);
+    const snap = await getTillSnapshot(slug);
     if (!snap) return NextResponse.json({ error: "Unknown venue." }, { status: 404 });
     return NextResponse.json(snap);
   }
@@ -34,10 +47,10 @@ export async function POST(request: Request) {
   };
 
   if (body.action === "order" && body.code && body.items?.length) {
-    const target = findPayTarget(body.code);
+    const target = await resolvePayTarget(body.code);
     if (!target) return NextResponse.json({ error: "Unknown table." }, { status: 404 });
     const code = tablePayCode(target.venue, target.table);
-    const base = getCheck(code) ?? emptyBill(target.venue, target.table);
+    const base = (await getCheck(code)) ?? emptyBill(target.venue, target.table);
     const incoming = body.items
       .filter((i) => i.name.trim() && i.qty > 0 && i.omr > 0)
       .map((i) => ({
@@ -47,9 +60,9 @@ export async function POST(request: Request) {
         detail: i.detail,
       }));
     if (!incoming.length) return NextResponse.json({ error: "Add items." }, { status: 400 });
-    const bill = appendCheckItems(base, incoming);
+    const bill = await appendCheckItems(base, incoming);
     const summary = incoming.map((i) => `${i.qty}× ${i.name}`).join(", ");
-    recordAlert({
+    await recordAlert({
       type: "order",
       code,
       table: target.table.number,
@@ -60,16 +73,16 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "clear" && body.slug && body.table) {
-    const venue = findVenue(body.slug);
+    const venue = await resolveVenue(body.slug);
     if (!venue) return NextResponse.json({ error: "Unknown venue." }, { status: 404 });
     const table = venue.tables.find((t) => t.number === body.table);
     if (!table) return NextResponse.json({ error: "Unknown table." }, { status: 404 });
-    clearCheck(tablePayCode(venue, table));
+    await clearCheck(tablePayCode(venue, table));
     return NextResponse.json({ ok: true });
   }
 
   if (body.action === "save" && body.slug && body.table) {
-    const venue = findVenue(body.slug);
+    const venue = await resolveVenue(body.slug);
     if (!venue) return NextResponse.json({ error: "Unknown venue." }, { status: 404 });
     const table = venue.tables.find((t) => t.number === body.table);
     if (!table) return NextResponse.json({ error: "Unknown table." }, { status: 404 });
@@ -102,7 +115,7 @@ export async function POST(request: Request) {
       pos: "demo",
       items,
     };
-    saveCheck(bill);
+    await saveCheck(bill);
     return NextResponse.json({ ok: true, bill });
   }
 

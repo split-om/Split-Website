@@ -30,8 +30,8 @@ export function SuccessClient() {
       <p className="text-sm font-bold uppercase tracking-[0.18em] text-split">Application {app.id}</p>
       <h1 className="mt-3 text-4xl font-extrabold tracking-tight">You are in the queue</h1>
       <p className="mt-3 text-lg text-muted">
-        {app.venueName} is registered as a {venueTypeLabel(app.venueType).toLowerCase()} in {app.city}. In a live
-        rollout, a Split specialist would call {app.firstName} within one business day.
+        {app.venueName} is registered as a {venueTypeLabel(app.venueType).toLowerCase()} in {app.city}. Split HQ
+        will approve the café — then you get a staff login, menu editor, and a QR for every table.
       </p>
 
       <div className="mt-8 rounded-[1.6rem] border border-line p-6">

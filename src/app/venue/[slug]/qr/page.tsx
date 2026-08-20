@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
-import { findVenue } from "@/lib/venue";
+import { resolveVenue } from "@/lib/store";
 import { QrPrintSheet } from "@/components/venue/QrPrintSheet";
+
+export const dynamic = "force-dynamic";
+export const dynamicParams = true;
 
 export function generateStaticParams() {
   return [{ slug: "qahwa" }];
@@ -12,7 +15,7 @@ export default async function QrPrintPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const venue = findVenue(slug);
+  const venue = await resolveVenue(slug);
   if (!venue) notFound();
   return <QrPrintSheet venue={venue} />;
 }

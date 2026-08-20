@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
-import { findVenue, tablePayCode } from "@/lib/venue";
-import { getTillSnapshot } from "@/lib/till";
-import { getAlerts, getSession } from "@/lib/sync-store";
+import { tablePayCode } from "@/lib/venue";
+import { getAlerts, getSession, getTillSnapshot, resolveVenue } from "@/lib/store";
 import { VenueConsole } from "@/components/venue/VenueConsole";
 import { StaffGate } from "@/components/venue/StaffGate";
 
 export const dynamic = "force-dynamic";
+export const dynamicParams = true;
 
 export function generateStaticParams() {
   return [{ slug: "qahwa" }];
@@ -17,13 +17,13 @@ export default async function VenueConsolePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const venue = findVenue(slug);
+  const venue = await resolveVenue(slug);
   if (!venue) notFound();
-  const snap = getTillSnapshot(slug) ?? { checks: {}, tables: {} };
-  const sessions: Record<string, ReturnType<typeof getSession>> = {};
+  const snap = (await getTillSnapshot(slug)) ?? { checks: {}, tables: {} };
+  const sessions: Record<string, Awaited<ReturnType<typeof getSession>>> = {};
   for (const table of venue.tables) {
     const code = tablePayCode(venue, table);
-    sessions[code] = getSession(code);
+    sessions[code] = await getSession(code);
   }
   return (
     <StaffGate venue={venue} need="floor">
@@ -31,7 +31,7 @@ export default async function VenueConsolePage({
         venue={venue}
         initialChecks={snap.checks}
         initialSessions={sessions}
-        initialAlerts={getAlerts(venue.name)}
+        initialAlerts={await getAlerts(venue.name)}
       />
     </StaffGate>
   );
