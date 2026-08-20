@@ -1,5 +1,5 @@
 import { createAmwalPayment, getAmwalConfig } from "./amwal";
-import type { CreatePaymentInput } from "./types";
+import type { CreatePaymentInput, CreatePaymentResult } from "./types";
 import { AMWAL_DISPLAY_NAME } from "./public";
 
 export { AMWAL_DISPLAY_NAME, methodLabel } from "./public";

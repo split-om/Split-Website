@@ -39,11 +39,12 @@ export function ConnectClient() {
   }
 
   const plan = posPlan(app.pos);
+  const applicationId = app.id;
 
   async function connect() {
     setBusy(true);
     await new Promise((r) => setTimeout(r, 1100));
-    const next = updateApplication(app.id, {
+    const next = updateApplication(applicationId, {
       posConnected: true,
       posConnectedAt: new Date().toISOString(),
       status: "in-review",
