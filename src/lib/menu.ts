@@ -4,6 +4,7 @@ export type MenuItem = {
   detail?: string;
   omr: number;
   category: "Drinks" | "Food" | "Sweets";
+  photo?: string;
 };
 
 export const VENUE_MENUS: Record<string, MenuItem[]> = {

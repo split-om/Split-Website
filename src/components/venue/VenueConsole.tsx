@@ -10,6 +10,7 @@ import { methodLabel } from "@/lib/payments/public";
 import type { StaffAlert } from "@/lib/staff-alerts";
 import { billForTable, tablePayCode, type FloorTable, type VenueProfile } from "@/lib/venue";
 import { Logo } from "@/components/Logo";
+import { useStaff } from "./StaffGate";
 
 type TableState = "empty" | "open" | "partial" | "paid";
 
@@ -33,6 +34,7 @@ export function VenueConsole({
   const [ready, setReady] = useState(false);
   const [alerts, setAlerts] = useState<StaffAlert[]>(initialAlerts ?? []);
   const [sessions, setSessions] = useState<Record<string, TableSession>>(initialSessions ?? {});
+  const { me, signOut } = useStaff();
 
   useEffect(() => {
     const pull = () => {
@@ -112,25 +114,40 @@ export function VenueConsole({
           <Logo />
           <div>
             <div className="text-sm font-extrabold">{venue.name}</div>
-            <div className="text-[11px] text-muted">Staff tablet · {venue.pos} · {venue.server} on shift</div>
+            <div className="text-[11px] text-muted">Staff · {me.name} · {venue.pos}</div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
           <Stat label="Open tables" value={String(openCount)} />
           <Stat label="Taken today" value={formatOMR(paidToday)} />
           <Stat label="Tips" value={formatOMR(tipsToday)} />
-          <Link
-            href={`/venue/${venue.slug}/till`}
-            className="rounded-full bg-violet-600 px-3 py-2 font-bold text-white"
-          >
-            Open till
-          </Link>
+          {me.access.till ? (
+            <Link
+              href={`/venue/${venue.slug}/till`}
+              className="rounded-full bg-violet-600 px-3 py-2 font-bold text-white"
+            >
+              Open till
+            </Link>
+          ) : null}
+          {me.access.menu ? (
+            <Link href={`/venue/${venue.slug}/menu`} className="rounded-full bg-white px-3 py-2 font-bold">
+              Edit menu
+            </Link>
+          ) : null}
+          {me.access.people ? (
+            <Link href={`/venue/${venue.slug}/people`} className="rounded-full bg-white px-3 py-2 font-bold">
+              People
+            </Link>
+          ) : null}
           <Link
             href={`/venue/${venue.slug}/qr`}
             className="rounded-full bg-ink px-3 py-2 font-bold text-white"
           >
             Print table QRs
           </Link>
+          <button type="button" onClick={signOut} className="rounded-full px-3 py-2 font-bold text-muted">
+            Sign out
+          </button>
         </div>
       </header>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { formatOMR, formatOMRLabel, omrToBaisa } from "@/lib/money";
 import { menuForVenue, type MenuItem } from "@/lib/menu";
 
@@ -28,7 +29,15 @@ export function GuestMenu({
   hasBill: boolean;
   onSeeBill: () => void;
 }) {
-  const menu = menuForVenue(slug);
+  const [menu, setMenu] = useState<MenuItem[]>(() => menuForVenue(slug));
+  useEffect(() => {
+    fetch(`/api/menu?venue=${encodeURIComponent(slug)}`)
+      .then((r) => r.json())
+      .then((d: { items?: MenuItem[] }) => {
+        if (d.items?.length) setMenu(d.items);
+      })
+      .catch(() => undefined);
+  }, [slug]);
   const count = cart.reduce((s, l) => s + l.qty, 0);
   const total = cart.reduce((s, l) => s + omrToBaisa(l.omr) * l.qty, 0);
 
@@ -48,7 +57,11 @@ export function GuestMenu({
                 const qty = cart.find((l) => l.name === m.name)?.qty ?? 0;
                 return (
                   <li key={m.id} className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 last:border-0">
-                    <div className="min-w-0">
+                    {m.photo ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.photo} alt="" className="h-14 w-14 shrink-0 rounded-2xl object-cover" />
+                    ) : null}
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-extrabold">{m.name}</p>
                       {m.detail ? <p className="text-[11px] text-muted">{m.detail}</p> : null}
                       <p className="mt-0.5 text-xs font-semibold">{formatOMR(omrToBaisa(m.omr))}</p>

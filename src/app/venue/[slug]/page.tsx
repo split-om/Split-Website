@@ -3,6 +3,7 @@ import { findVenue, tablePayCode } from "@/lib/venue";
 import { getTillSnapshot } from "@/lib/till";
 import { getAlerts, getSession } from "@/lib/sync-store";
 import { VenueConsole } from "@/components/venue/VenueConsole";
+import { StaffGate } from "@/components/venue/StaffGate";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +26,13 @@ export default async function VenueConsolePage({
     sessions[code] = getSession(code);
   }
   return (
-    <VenueConsole
-      venue={venue}
-      initialChecks={snap.checks}
-      initialSessions={sessions}
-      initialAlerts={getAlerts(venue.name)}
-    />
+    <StaffGate venue={venue} need="floor">
+      <VenueConsole
+        venue={venue}
+        initialChecks={snap.checks}
+        initialSessions={sessions}
+        initialAlerts={getAlerts(venue.name)}
+      />
+    </StaffGate>
   );
 }

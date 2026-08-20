@@ -5,11 +5,11 @@ import Link from "next/link";
 import { tablePayCode, type VenueProfile } from "@/lib/venue";
 import type { VenueBill } from "@/lib/bills";
 import { formatOMR, formatOMRLabel, omrToBaisa } from "@/lib/money";
-import { menuForVenue } from "@/lib/menu";
+import type { MenuItem } from "@/lib/menu";
 import { SplitMark } from "@/components/Logo";
 
+
 const PIN = "1234";
-const MENU = menuForVenue("qahwa").map((m) => ({ name: m.name, omr: m.omr }));
 
 type Line = { name: string; qty: number; omr: number };
 type TableMeta = {
@@ -43,6 +43,7 @@ export function StaffTill({
   initialChecks,
   initialTables,
   initialBill,
+  authed,
 }: {
   venue: VenueProfile;
   initialDemo?: "tables" | "ticket";
@@ -50,8 +51,10 @@ export function StaffTill({
   initialChecks?: Record<string, VenueBill>;
   initialTables?: Record<string, TableMeta>;
   initialBill?: VenueBill;
+  authed?: boolean;
 }) {
-  const [floor, setFloor] = useState<Floor>(initialDemo ?? "lock");
+  const [floor, setFloor] = useState<Floor>(initialDemo ?? (authed ? "tables" : "lock"));
+  const [menu, setMenu] = useState<Array<{ name: string; omr: number }>>([]);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
   const [table, setTable] = useState<string | null>(
@@ -76,6 +79,15 @@ export function StaffTill({
       })
       .catch(() => undefined);
   }
+
+  useEffect(() => {
+    fetch(`/api/menu?venue=${encodeURIComponent(venue.slug)}`)
+      .then((r) => r.json())
+      .then((d: { items?: MenuItem[] }) =>
+        setMenu((d.items ?? []).map((m) => ({ name: m.name, omr: m.omr }))),
+      )
+      .catch(() => undefined);
+  }, [venue.slug]);
 
   useEffect(() => {
     const tick = () =>
@@ -403,7 +415,7 @@ export function StaffTill({
 
           {mode === "menu" ? (
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {MENU.map((m) => (
+              {menu.map((m) => (
                 <button
                   key={m.name}
                   type="button"

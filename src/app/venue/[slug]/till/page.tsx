@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { findVenue, tablePayCode } from "@/lib/venue";
 import { getTillSnapshot } from "@/lib/till";
 import { StaffTill } from "@/components/venue/StaffTill";
+import { StaffGate } from "@/components/venue/StaffGate";
 
 export const dynamic = "force-dynamic";
 
@@ -28,13 +29,16 @@ export default async function TillPage({
       ? snap.checks[tablePayCode(venue, venue.tables.find((t) => t.number === tableNo)!)]
       : undefined;
   return (
-    <StaffTill
-      venue={venue}
-      initialDemo={demo}
-      initialTable={tableNo}
-      initialChecks={snap.checks}
-      initialTables={snap.tables}
-      initialBill={seed}
-    />
+    <StaffGate venue={venue} need="till">
+      <StaffTill
+        venue={venue}
+        initialDemo={demo}
+        initialTable={tableNo}
+        initialChecks={snap.checks}
+        initialTables={snap.tables}
+        initialBill={seed}
+        authed
+      />
+    </StaffGate>
   );
 }

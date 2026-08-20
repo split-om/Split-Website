@@ -5,19 +5,25 @@ import type { StaffAlert } from "@/lib/staff-alerts";
 import type { JoinApplication } from "@/lib/join";
 import { findBill, type VenueBill } from "@/lib/bills";
 import { newId } from "@/lib/id";
+import { menuForVenue, type MenuItem } from "@/lib/menu";
+import { hashPassword, newToken, seedStaff } from "@/lib/staff";
+import { toPublic, type StaffAccess, type StaffPublic, type StaffToken, type StaffUser } from "@/lib/staff-types";
 
 type Store = {
   sessions: Record<string, TableSession>;
   alerts: StaffAlert[];
   applications: JoinApplication[];
   checks: Record<string, VenueBill>;
+  staff: StaffUser[];
+  menus: Record<string, MenuItem[]>;
+  staffTokens: StaffToken[];
 };
 
 const DIR = join(process.cwd(), ".data");
 const FILE = join(DIR, "sync.json");
 
 function empty(): Store {
-  return { sessions: {}, alerts: [], applications: [], checks: {} };
+  return { sessions: {}, alerts: [], applications: [], checks: {}, staff: [], menus: {}, staffTokens: [] };
 }
 
 function read(): Store {
@@ -29,6 +35,9 @@ function read(): Store {
       alerts: parsed.alerts ?? [],
       applications: parsed.applications ?? [],
       checks: parsed.checks ?? {},
+      staff: parsed.staff ?? [],
+      menus: parsed.menus ?? {},
+      staffTokens: parsed.staffTokens ?? [],
     };
   } catch {
     return empty();
@@ -143,6 +152,111 @@ export function recordApplication(app: JoinApplication) {
 
 export function listApplications(): JoinApplication[] {
   return read().applications;
+}
+
+export function getVenueMenu(slug: string): MenuItem[] {
+  return read().menus[slug] ?? menuForVenue(slug);
+}
+
+export function saveVenueMenu(slug: string, items: MenuItem[]) {
+  const store = read();
+  store.menus[slug] = items;
+  write(store);
+}
+
+function ensureStaff(store: Store, slug: string) {
+  if (!store.staff.some((u) => u.slug === slug)) {
+    store.staff = [...store.staff, ...seedStaff(slug)];
+    write(store);
+  }
+}
+
+export function listStaff(slug: string): StaffUser[] {
+  const store = read();
+  ensureStaff(store, slug);
+  return read().staff.filter((u) => u.slug === slug);
+}
+
+export function loginStaff(slug: string, name: string, password: string): { user: StaffPublic; token: string } | null {
+  const users = listStaff(slug);
+  const want = name.trim().toLowerCase();
+  const user = users.find((u) => u.name.trim().toLowerCase() === want);
+  if (!user || user.passwordHash !== hashPassword(password)) return null;
+  const token = newToken();
+  const store = read();
+  store.staffTokens = [
+    { token, slug, userId: user.id, at: new Date().toISOString() },
+    ...store.staffTokens.filter((t) => !(t.slug === slug && t.userId === user.id)),
+  ].slice(0, 80);
+  write(store);
+  return { user: toPublic(user), token };
+}
+
+export function staffFromToken(token: string): StaffUser | null {
+  if (!token) return null;
+  const store = read();
+  const row = store.staffTokens.find((t) => t.token === token);
+  if (!row) return null;
+  ensureStaff(store, row.slug);
+  return read().staff.find((u) => u.id === row.userId && u.slug === row.slug) ?? null;
+}
+
+export function logoutStaff(token: string) {
+  const store = read();
+  store.staffTokens = store.staffTokens.filter((t) => t.token !== token);
+  write(store);
+}
+
+export function upsertStaff(
+  slug: string,
+  input: { id?: string; name: string; password?: string; access: StaffAccess },
+): StaffUser | { error: string } {
+  const store = read();
+  ensureStaff(store, slug);
+  const fresh = read();
+  const name = input.name.trim();
+  if (!name) return { error: "Name is required." };
+  if (input.id) {
+    const i = fresh.staff.findIndex((u) => u.id === input.id && u.slug === slug);
+    if (i < 0) return { error: "Unknown person." };
+    const cur = fresh.staff[i];
+    if (fresh.staff.some((u) => u.slug === slug && u.id !== cur.id && u.name.toLowerCase() === name.toLowerCase())) {
+      return { error: "That name is already used." };
+    }
+    fresh.staff[i] = {
+      ...cur,
+      name,
+      access: cur.locked ? { ...cur.access, ...input.access, people: true, menu: true } : input.access,
+      passwordHash: input.password?.trim() ? hashPassword(input.password) : cur.passwordHash,
+    };
+    write(fresh);
+    return fresh.staff[i];
+  }
+  if (!input.password?.trim()) return { error: "Set a password for this person." };
+  if (fresh.staff.some((u) => u.slug === slug && u.name.toLowerCase() === name.toLowerCase())) {
+    return { error: "That name is already used." };
+  }
+  const user: StaffUser = {
+    id: newId(),
+    slug,
+    name,
+    passwordHash: hashPassword(input.password),
+    access: input.access,
+  };
+  fresh.staff.push(user);
+  write(fresh);
+  return user;
+}
+
+export function removeStaff(slug: string, id: string): { error: string } | { ok: true } {
+  const store = read();
+  const user = store.staff.find((u) => u.id === id && u.slug === slug);
+  if (!user) return { error: "Unknown person." };
+  if (user.locked) return { error: "The owner account cannot be removed." };
+  store.staff = store.staff.filter((u) => !(u.id === id && u.slug === slug));
+  store.staffTokens = store.staffTokens.filter((t) => !(t.userId === id && t.slug === slug));
+  write(store);
+  return { ok: true };
 }
 
 export function hqSnapshot() {
