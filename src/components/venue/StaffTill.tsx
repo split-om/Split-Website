@@ -7,6 +7,8 @@ import type { VenueBill } from "@/lib/bills";
 import { formatOMR, formatOMRLabel, omrToBaisa } from "@/lib/money";
 import type { MenuItem } from "@/lib/menu";
 import { SplitMark } from "@/components/Logo";
+import { PrintReceiptButton } from "./PrintReceiptButton";
+import { printTableReceipt } from "@/lib/print-receipt";
 
 
 const PIN = "1234";
@@ -248,6 +250,9 @@ export function StaffTill({
     setMsg(
       `Paid on bank POS${data.amountBaisa != null ? ` · ${formatOMRLabel(data.amountBaisa)}` : ""}. Table ${table} is cleared.`,
     );
+    const row = venue.tables.find((t) => t.number === table);
+    const open = row ? checks[tablePayCode(venue, row)] : undefined;
+    if (open) printTableReceipt(open).catch(() => undefined);
     refresh();
   }
 
@@ -534,6 +539,32 @@ export function StaffTill({
           >
             {busy ? "Sending…" : "Send to guest QR"}
           </button>
+          <PrintReceiptButton
+            dark
+            className="mt-2 w-full rounded-full bg-white/10 py-3 text-sm font-extrabold disabled:opacity-40"
+            bill={
+              checks[code] ??
+              (foodBaisa > 0
+                ? {
+                    code,
+                    venue: venue.name,
+                    venueArea: venue.area,
+                    table,
+                    server: venue.server,
+                    coverUrl: "/images/hero-4.jpg",
+                    vatRate: 0.05,
+                    items: lines.length
+                      ? lines.map((l, i) => ({
+                          id: `t${i}`,
+                          name: l.name,
+                          qty: l.qty,
+                          unitBaisa: omrToBaisa(l.omr),
+                        }))
+                      : [{ id: "total", name: "Table total", qty: 1, unitBaisa: foodBaisa }],
+                  }
+                : undefined)
+            }
+          />
           {meta && meta.remaining > 0 ? (
             <button
               type="button"

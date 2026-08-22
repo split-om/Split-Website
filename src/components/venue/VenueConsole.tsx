@@ -11,6 +11,8 @@ import type { StaffAlert } from "@/lib/staff-alerts";
 import { billForTable, tablePayCode, type FloorTable, type VenueProfile } from "@/lib/venue";
 import { Logo } from "@/components/Logo";
 import { useStaff } from "./StaffGate";
+import { PrintReceiptButton } from "./PrintReceiptButton";
+import { printTableReceipt } from "@/lib/print-receipt";
 
 type TableState = "empty" | "open" | "partial" | "paid";
 
@@ -338,6 +340,7 @@ function TablePanel({
     }
     setPosAsk(false);
     setPosNote(`Paid on bank POS. Table ${table.number} is cleared.`);
+    if (bill) printTableReceipt(bill, data.session).catch(() => undefined);
     onPosSettled(data.code, data.session, table.number, data.amountBaisa);
   }
 
@@ -464,6 +467,7 @@ function TablePanel({
       ) : null}
 
       <div className="mt-4 flex flex-col gap-2">
+        <PrintReceiptButton bill={bill} session={session} />
         {remaining > 0 ? (
           <button
             type="button"
