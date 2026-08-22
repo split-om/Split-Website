@@ -36,6 +36,8 @@ export type VenueBill = {
   vatRate: number;
   pos?: "foodics" | "demo";
   posOrderId?: string;
+  guestName?: string;
+  guestPhone?: string;
 };
 
 export const bills: VenueBill[] = [

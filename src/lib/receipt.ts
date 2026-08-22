@@ -36,6 +36,8 @@ export function receiptText(bill: VenueBill, session?: TableSession | null) {
     bill.venueArea ? center(bill.venueArea.slice(0, WIDTH)) : "",
     line(),
     pad(`Table ${bill.table}`, when),
+    bill.guestName ? center(bill.guestName) : "",
+    bill.guestPhone ? center(bill.guestPhone) : "",
     bill.server ? `Server ${bill.server}` : "",
     line(),
     ...bill.items.map((item) => pad(`${item.qty}x ${item.name}`.slice(0, 20), formatOMR(itemSubtotal(item)))),
@@ -105,6 +107,8 @@ export function receiptHtml(bill: VenueBill, session?: TableSession | null) {
   ${bill.venueArea ? `<div class="sub">${escapeHtml(bill.venueArea)}</div>` : ""}
   <hr />
   <div class="row"><span>Table ${escapeHtml(bill.table)}</span><span>${escapeHtml(when)}</span></div>
+  ${bill.guestName ? `<div class="sub">${escapeHtml(bill.guestName)}</div>` : ""}
+  ${bill.guestPhone ? `<div class="sub">${escapeHtml(bill.guestPhone)}</div>` : ""}
   ${bill.server ? `<div>Server ${escapeHtml(bill.server)}</div>` : ""}
   <hr />
   ${items}

@@ -9,6 +9,8 @@ import type { MenuItem } from "@/lib/menu";
 import type { StaffAccess } from "@/lib/staff-types";
 import { emptyBill, findPayTarget as catalogTarget, findVenue as catalogVenue, venues as catalog, tablePayCode, billForTable, type VenueProfile } from "@/lib/venue";
 import { remainingBaisa, remainingFee } from "@/lib/pay-session";
+import { newId } from "@/lib/id";
+import type { StoredReceipt } from "@/lib/guests";
 
 export async function resolveVenue(slug: string): Promise<VenueProfile | undefined> {
   if (useDb()) return pg.getVenue(slug);
@@ -43,6 +45,7 @@ export async function saveCheck(bill: VenueBill) {
 }
 
 export async function clearCheck(code: string) {
+  await archiveOpenReceipt(code);
   return useDb() ? pg.clearCheck(code) : file.clearCheck(code);
 }
 
@@ -74,6 +77,7 @@ export async function ackStoredAlert(id: string) {
 }
 
 export async function resetStored(code: string) {
+  await archiveOpenReceipt(code);
   return useDb() ? pg.resetStored(code) : file.resetStored(code);
 }
 
@@ -162,6 +166,53 @@ export async function getTillSnapshot(slug: string) {
 
 export function shellBill(venue: VenueProfile, table: { number: string; seats: number; billCode?: string }) {
   return emptyBill(venue, table);
+}
+
+export async function archiveOpenReceipt(code: string, slugHint?: string) {
+  const bill = await getCheck(code);
+  if (!bill?.items.length) return null;
+  const session = await getSession(code);
+  const slug = slugHint || code.split("-")[0] || "venue";
+  const receipt: StoredReceipt = {
+    id: newId(),
+    slug,
+    code,
+    table: bill.table,
+    at: new Date().toISOString(),
+    guestName: bill.guestName,
+    guestPhone: bill.guestPhone,
+    bill,
+    session,
+  };
+  if (useDb()) await pg.saveReceipt(receipt);
+  else file.saveReceipt(receipt);
+  return receipt;
+}
+
+export async function listReceipts(slug: string) {
+  return useDb() ? pg.listReceipts(slug) : file.listReceipts(slug);
+}
+
+export async function getStoredReceipt(id: string) {
+  return useDb() ? pg.getReceipt(id) : file.getReceipt(id);
+}
+
+export async function upsertCustomer(slug: string, name: string, phone: string) {
+  return useDb() ? pg.upsertCustomer(slug, name, phone) : file.upsertCustomer(slug, name, phone);
+}
+
+export async function listCustomers(slug: string, q?: string) {
+  return useDb() ? pg.listCustomers(slug, q) : file.listCustomers(slug, q);
+}
+
+export async function attachGuest(code: string, slug: string, name: string, phone: string) {
+  const guest = await upsertCustomer(slug, name, phone);
+  if ("error" in guest) return guest;
+  const bill = await getCheck(code);
+  if (bill) {
+    await saveCheck({ ...bill, guestName: guest.name, guestPhone: guest.phone });
+  }
+  return guest;
 }
 
 /** Next sitting on a settled table starts a clean session. */

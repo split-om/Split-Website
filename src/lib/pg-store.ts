@@ -9,6 +9,7 @@ import { ALL_ACCESS, toPublic, type StaffAccess, type StaffPublic, type StaffUse
 import { ensureSchema, getSql } from "@/lib/db";
 import { venues as catalog, type FloorTable, type VenueProfile } from "@/lib/venue";
 import { slugifyName, tableCountFromRange } from "@/lib/slug";
+import { normalizePhone, type GuestAccount, type StoredReceipt } from "@/lib/guests";
 
 async function db() {
   const sql = await ensureSchema();
@@ -446,4 +447,56 @@ export async function hqSnapshot() {
     },
     venues: [...byVenue.values()].sort((a, b) => b.fee - a.fee),
   };
+}
+
+export async function upsertCustomer(slug: string, name: string, phone: string): Promise<GuestAccount | { error: string }> {
+  const sql = await db();
+  const n = name.trim();
+  const p = normalizePhone(phone);
+  if (!n) return { error: "Name is required." };
+  if (p.length < 8) return { error: "Enter a phone number." };
+  const existing = await sql`SELECT id, slug, name, phone FROM customers WHERE slug = ${slug} AND phone = ${p}`;
+  if (existing[0]) {
+    const id = existing[0].id as string;
+    await sql`UPDATE customers SET name = ${n} WHERE id = ${id}`;
+    return { id, slug, name: n, phone: p };
+  }
+  const guest: GuestAccount = { id: newId(), slug, name: n, phone: p };
+  await sql`INSERT INTO customers (id, slug, name, phone) VALUES (${guest.id}, ${guest.slug}, ${guest.name}, ${guest.phone})`;
+  return guest;
+}
+
+export async function listCustomers(slug: string, q?: string): Promise<GuestAccount[]> {
+  const sql = await db();
+  const rows = (await sql`SELECT id, slug, name, phone FROM customers WHERE slug = ${slug} ORDER BY name`) as GuestAccount[];
+  const needle = (q || "").trim().toLowerCase();
+  if (!needle) return rows;
+  return rows.filter((g) => g.name.toLowerCase().includes(needle) || g.phone.includes(needle.replace(/\D/g, "")));
+}
+
+export async function findCustomer(slug: string, phone: string): Promise<GuestAccount | null> {
+  const sql = await db();
+  const p = normalizePhone(phone);
+  if (!p) return null;
+  const rows = await sql`SELECT id, slug, name, phone FROM customers WHERE slug = ${slug} AND phone = ${p}`;
+  return (rows[0] as GuestAccount) ?? null;
+}
+
+export async function saveReceipt(receipt: StoredReceipt) {
+  const sql = await db();
+  await sql`INSERT INTO receipts (id, slug, code, table_number, at, guest_name, guest_phone, payload)
+    VALUES (${receipt.id}, ${receipt.slug}, ${receipt.code}, ${receipt.table}, ${receipt.at}, ${receipt.guestName ?? null}, ${receipt.guestPhone ?? null}, ${receipt as never})
+    ON CONFLICT (id) DO NOTHING`;
+}
+
+export async function listReceipts(slug: string): Promise<StoredReceipt[]> {
+  const sql = await db();
+  const rows = await sql`SELECT payload FROM receipts WHERE slug = ${slug} ORDER BY at DESC LIMIT 80`;
+  return rows.map((r) => r.payload as StoredReceipt);
+}
+
+export async function getReceipt(id: string): Promise<StoredReceipt | null> {
+  const sql = await db();
+  const rows = await sql`SELECT payload FROM receipts WHERE id = ${id}`;
+  return (rows[0]?.payload as StoredReceipt) ?? null;
 }

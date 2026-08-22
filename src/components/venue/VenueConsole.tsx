@@ -145,6 +145,12 @@ export function VenueConsole({
             </Link>
           ) : null}
           <Link
+            href={`/venue/${venue.slug}/receipts`}
+            className="rounded-full bg-white px-3 py-2 font-bold"
+          >
+            Receipts
+          </Link>
+          <Link
             href={`/venue/${venue.slug}/qr`}
             className="rounded-full bg-ink px-3 py-2 font-bold text-white"
           >
@@ -395,6 +401,10 @@ function TablePanel({
       </p>
       <h3 className="text-2xl font-extrabold">{state === "paid" ? "Paid" : "Open check"}</h3>
       <p className="text-sm text-muted">Server {bill.server}</p>
+      {bill.guestName ? (
+        <p className="mt-1 text-sm font-semibold">Guest {bill.guestName}</p>
+      ) : null}
+      <GuestAttach slug={venue.slug} code={bill.code} currentName={bill.guestName} />
       {calls.length > 0 ? (
         <div className="mt-3 rounded-2xl bg-amber-100 p-3">
           <p className="text-sm font-extrabold">Guest needs you</p>
@@ -529,6 +539,61 @@ function TablePanel({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function GuestAttach({
+  slug,
+  code,
+  currentName,
+}: {
+  slug: string;
+  code: string;
+  currentName?: string;
+}) {
+  const [name, setName] = useState(currentName ?? "");
+  const [phone, setPhone] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    setNote("");
+    const res = await fetch("/api/guests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, code, name, phone }),
+    });
+    const data = (await res.json()) as { error?: string; guest?: { name: string } };
+    setBusy(false);
+    setNote(res.ok ? `Saved ${data.guest?.name || name} on this bill.` : data.error || "Could not save.");
+  }
+
+  return (
+    <div className="mt-3 rounded-2xl bg-sand p-3">
+      <p className="text-xs font-bold uppercase tracking-wider text-muted">Guest account</p>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Name"
+        className="mt-2 w-full rounded-xl border border-line bg-white px-3 py-2 text-sm"
+      />
+      <input
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        placeholder="Phone"
+        className="mt-2 w-full rounded-xl border border-line bg-white px-3 py-2 text-sm"
+      />
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void save()}
+        className="mt-2 w-full rounded-full bg-white py-2 text-xs font-extrabold"
+      >
+        {busy ? "Saving…" : currentName ? "Update guest" : "Put name on receipt"}
+      </button>
+      {note ? <p className="mt-2 text-xs font-semibold">{note}</p> : null}
     </div>
   );
 }

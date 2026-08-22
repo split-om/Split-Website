@@ -356,10 +356,12 @@ export function PayApp({ bill: initial, slug }: { bill: VenueBill; slug: string 
         {step === "bill" && (
           <BillStep
             bill={bill}
+            slug={slug}
             remaining={remaining}
             session={session}
             onWaiter={callWaiter}
             onReset={resetDemo}
+            onBill={setBill}
             onOrderMore={() => {
               setSent("");
               setStep("menu");
@@ -539,21 +541,48 @@ function Progress({ step }: { step: Step }) {
 
 function BillStep({
   bill,
+  slug,
   remaining,
   session,
   onWaiter,
   onReset,
   onOrderMore,
+  onBill,
 }: {
   bill: VenueBill;
+  slug: string;
   remaining: number;
   session: TableSession;
   onWaiter: () => void;
   onReset: () => void;
   onOrderMore: () => void;
+  onBill: (bill: VenueBill) => void;
 }) {
   const total = billTotal(bill);
   const paid = session.paidBaisa;
+  const [guestName, setGuestName] = useState(bill.guestName ?? "");
+  const [guestPhone, setGuestPhone] = useState(bill.guestPhone ?? "");
+  const [guestNote, setGuestNote] = useState("");
+  const [guestBusy, setGuestBusy] = useState(false);
+
+  async function saveGuest() {
+    setGuestBusy(true);
+    setGuestNote("");
+    const res = await fetch("/api/guests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, code: bill.code, name: guestName, phone: guestPhone }),
+    });
+    const data = (await res.json()) as { error?: string; guest?: { name: string; phone: string } };
+    setGuestBusy(false);
+    if (!res.ok) {
+      setGuestNote(data.error || "Could not save.");
+      return;
+    }
+    onBill({ ...bill, guestName: data.guest?.name || guestName, guestPhone: data.guest?.phone || guestPhone });
+    setGuestNote("Saved. Your name will be on the receipt.");
+  }
+
   return (
     <div>
       <img src={bill.coverUrl} alt="" className="mb-4 h-36 w-full rounded-[1.4rem] object-cover" />
@@ -564,6 +593,7 @@ function BillStep({
           <p className="text-sm text-muted">
             {bill.venue} · {bill.venueArea}
           </p>
+          {bill.guestName ? <p className="mt-1 text-sm font-semibold">Welcome, {bill.guestName}</p> : null}
           {bill.pos === "foodics" ? (
             <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-split">
               Open check from Foodics · stock stays in POS
@@ -582,6 +612,32 @@ function BillStep({
       >
         + Order more food
       </button>
+
+      <div className="mt-3 rounded-[1.4rem] bg-white p-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-split">Your account</p>
+        <p className="mt-1 text-[11px] text-muted">Save your name so it prints on the receipt.</p>
+        <input
+          value={guestName}
+          onChange={(e) => setGuestName(e.target.value)}
+          placeholder="Your name"
+          className="mt-2 w-full rounded-xl border border-line px-3 py-2 text-sm"
+        />
+        <input
+          value={guestPhone}
+          onChange={(e) => setGuestPhone(e.target.value)}
+          placeholder="Phone"
+          className="mt-2 w-full rounded-xl border border-line px-3 py-2 text-sm"
+        />
+        <button
+          type="button"
+          disabled={guestBusy}
+          onClick={() => void saveGuest()}
+          className="mt-2 w-full rounded-full bg-sand py-2 text-xs font-extrabold"
+        >
+          {guestBusy ? "Saving…" : "Save my name"}
+        </button>
+        {guestNote ? <p className="mt-2 text-xs font-semibold">{guestNote}</p> : null}
+      </div>
 
       <div className="mt-3 overflow-hidden rounded-[1.4rem] bg-white">
         {bill.items.length === 0 ? (

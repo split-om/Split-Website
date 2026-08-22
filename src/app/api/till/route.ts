@@ -114,6 +114,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Add items or a total." }, { status: 400 });
     }
 
+    const prior = await getCheck(code);
     const bill: VenueBill = {
       code,
       venue: venue.name,
@@ -124,6 +125,8 @@ export async function POST(request: Request) {
       vatRate: 0.05,
       pos: "demo",
       items,
+      guestName: prior?.guestName,
+      guestPhone: prior?.guestPhone,
     };
     await saveCheck(bill);
     return NextResponse.json({ ok: true, bill });

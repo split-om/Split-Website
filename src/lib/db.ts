@@ -88,6 +88,23 @@ export async function ensureSchema() {
     payload JSONB NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now()
   )`;
+  await db`CREATE TABLE IF NOT EXISTS customers (
+    id TEXT PRIMARY KEY,
+    slug TEXT NOT NULL,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    UNIQUE (slug, phone)
+  )`;
+  await db`CREATE TABLE IF NOT EXISTS receipts (
+    id TEXT PRIMARY KEY,
+    slug TEXT NOT NULL,
+    code TEXT NOT NULL,
+    table_number TEXT NOT NULL,
+    at TIMESTAMPTZ NOT NULL,
+    guest_name TEXT,
+    guest_phone TEXT,
+    payload JSONB NOT NULL
+  )`;
   migrated = true;
   return db;
 }

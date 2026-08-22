@@ -121,7 +121,7 @@ export function venueLiteHtml(venue: { slug: string; name: string; area: string 
     var keys = tableList();
     var html = '<header><div><h1>' + venueName + '</h1><div class="sub">' +
       (me && me.name ? me.name : "Staff") + " · " + venueArea +
-      '</div></div><button class="btn ghost" id="out" style="width:auto;padding:8px 12px">Sign out</button></header><div class="wrap">';
+      '</div></div><div><button class="btn ghost" id="recs" style="width:auto;padding:8px 12px">Receipts</button> <button class="btn ghost" id="out" style="width:auto;padding:8px 12px">Sign out</button></div></header><div class="wrap">';
     if (note) html += '<p class="ok">' + note + "</p>";
     if (err) html += '<p class="err">' + err + "</p>";
     html += '<div class="grid">';
@@ -139,6 +139,7 @@ export function venueLiteHtml(venue: { slug: string; name: string; area: string 
     html += "</div></div>";
     $("app").innerHTML = html;
     $("out").onclick = signOut;
+    $("recs").onclick = renderReceipts;
     var tiles = document.getElementsByClassName("tile");
     for (var t = 0; t < tiles.length; t++) {
       tiles[t].onclick = function () {
@@ -156,6 +157,10 @@ export function venueLiteHtml(venue: { slug: string; name: string; area: string 
       meta.table + "</h1><span></span></header><div class='wrap'><div class='card'>";
     if (note) html += '<p class="ok">' + note + "</p>";
     if (err) html += '<p class="err">' + err + "</p>";
+    if (bill && bill.guestName) html += '<p><strong>Guest ' + bill.guestName + "</strong></p>";
+    html += '<label>Guest name<input id="gname" value="' + (bill && bill.guestName ? bill.guestName : "") + '" /></label>';
+    html += '<label>Guest phone<input id="gphone" value="' + (bill && bill.guestPhone ? bill.guestPhone : "") + '" /></label>';
+    html += '<button class="btn" id="gsave" style="background:#fff;border:1px solid #ddd">Put name on receipt</button>';
     if (!bill || !bill.items || !bill.items.length) {
       html += '<p class="muted">No open bill. Guest orders on the table QR.</p>';
     } else {
@@ -172,6 +177,19 @@ export function venueLiteHtml(venue: { slug: string; name: string; area: string 
     html += "</div></div>";
     $("app").innerHTML = html;
     $("back").onclick = function () { selected = null; note = ""; err = ""; renderFloor(); };
+    $("gsave").onclick = function () {
+      request("/api/guests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: slug, code: selected, name: $("gname").value, phone: $("gphone").value })
+      }).then(function (data) {
+        note = "Guest " + ((data.guest && data.guest.name) || $("gname").value) + " saved on this bill.";
+        load();
+      }).catch(function (e) {
+        err = e.message || "Could not save guest.";
+        renderTable();
+      });
+    };
     var printBtn = $("print");
     if (printBtn) printBtn.onclick = function () { printReceipt(bill, session); };
     var posBtn = $("pos");
@@ -207,12 +225,47 @@ export function venueLiteHtml(venue: { slug: string; name: string; area: string 
       return;
     }
     w.document.write("<html><head><title>Receipt</title><style>body{font:12px monospace;width:54mm}@page{size:58mm auto;margin:2mm}.row{display:flex;justify-content:space-between}h1,p{text-align:center}</style></head><body>");
-    w.document.write("<h1>SPLIT</h1><p>" + venueName + "<br/>Table " + bill.table + "</p>" + items);
+    w.document.write("<h1>SPLIT</h1><p>" + venueName + "<br/>Table " + bill.table +
+      (bill.guestName ? "<br/>" + bill.guestName : "") + "</p>" + items);
     w.document.write('<div class="row"><span>REMAINING</span><span>' + omr((snap.tables[selected] || {}).remaining || 0) + "</span></div>");
     w.document.write("<p>Thank you</p></body></html>");
     w.document.close();
     w.focus();
     w.print();
+  }
+
+  function renderReceipts() {
+    request("/api/receipts?venue=" + encodeURIComponent(slug)).then(function (data) {
+      var list = data.receipts || [];
+      var html = '<header><button class="btn ghost" id="back" style="width:auto;padding:8px 12px">← Tables</button><h1>Receipts</h1><span></span></header><div class="wrap">';
+      if (!list.length) html += '<div class="card muted">No closed receipts yet.</div>';
+      for (var i = 0; i < list.length; i++) {
+        var r = list[i];
+        html += '<div class="card" style="margin-bottom:10px"><strong>Table ' + r.table +
+          (r.guestName ? " · " + r.guestName : "") + "</strong><div class='muted'>" +
+          String(r.at).replace("T", " ").slice(0, 16) + "</div>";
+        if (r.bill && r.bill.items) {
+          for (var j = 0; j < r.bill.items.length; j++) {
+            var it = r.bill.items[j];
+            html += '<div class="row"><span>' + it.qty + "× " + it.name + "</span></div>";
+          }
+        }
+        html += '<button class="btn primary reprint" data-i="' + i + '">Print again</button></div>';
+      }
+      html += "</div>";
+      $("app").innerHTML = html;
+      $("back").onclick = function () { selected = null; renderFloor(); };
+      var btns = document.getElementsByClassName("reprint");
+      for (var b = 0; b < btns.length; b++) {
+        btns[b].onclick = function () {
+          var rec = list[Number(this.getAttribute("data-i"))];
+          if (rec && rec.bill) printReceipt(rec.bill, rec.session);
+        };
+      }
+    }).catch(function (e) {
+      err = e.message || "Could not load receipts.";
+      renderFloor();
+    });
   }
 
   function signOut() {

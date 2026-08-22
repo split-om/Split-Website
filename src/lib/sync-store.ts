@@ -8,6 +8,7 @@ import { newId } from "@/lib/id";
 import { menuForVenue, type MenuItem } from "@/lib/menu";
 import { hashPassword, newToken, seedStaff } from "@/lib/staff";
 import { toPublic, type StaffAccess, type StaffPublic, type StaffToken, type StaffUser } from "@/lib/staff-types";
+import { normalizePhone, type GuestAccount, type StoredReceipt } from "@/lib/guests";
 
 type Store = {
   sessions: Record<string, TableSession>;
@@ -17,13 +18,25 @@ type Store = {
   staff: StaffUser[];
   menus: Record<string, MenuItem[]>;
   staffTokens: StaffToken[];
+  customers: GuestAccount[];
+  receipts: StoredReceipt[];
 };
 
 const DIR = join(process.cwd(), ".data");
 const FILE = join(DIR, "sync.json");
 
 function empty(): Store {
-  return { sessions: {}, alerts: [], applications: [], checks: {}, staff: [], menus: {}, staffTokens: [] };
+  return {
+    sessions: {},
+    alerts: [],
+    applications: [],
+    checks: {},
+    staff: [],
+    menus: {},
+    staffTokens: [],
+    customers: [],
+    receipts: [],
+  };
 }
 
 function read(): Store {
@@ -38,6 +51,8 @@ function read(): Store {
       staff: parsed.staff ?? [],
       menus: parsed.menus ?? {},
       staffTokens: parsed.staffTokens ?? [],
+      customers: parsed.customers ?? [],
+      receipts: parsed.receipts ?? [],
     };
   } catch {
     return empty();
@@ -306,4 +321,49 @@ export function hqSnapshot() {
     },
     venues: [...byVenue.values()].sort((a, b) => b.fee - a.fee),
   };
+}
+
+export function upsertCustomer(slug: string, name: string, phone: string): GuestAccount | { error: string } {
+  const n = name.trim();
+  const p = normalizePhone(phone);
+  if (!n) return { error: "Name is required." };
+  if (p.length < 8) return { error: "Enter a phone number." };
+  const store = read();
+  const hit = store.customers.find((c) => c.slug === slug && c.phone === p);
+  if (hit) {
+    hit.name = n;
+    write(store);
+    return hit;
+  }
+  const guest: GuestAccount = { id: newId(), slug, name: n, phone: p };
+  store.customers = [guest, ...store.customers];
+  write(store);
+  return guest;
+}
+
+export function listCustomers(slug: string, q?: string): GuestAccount[] {
+  const rows = read().customers.filter((c) => c.slug === slug);
+  const needle = (q || "").trim().toLowerCase();
+  if (!needle) return rows;
+  return rows.filter((g) => g.name.toLowerCase().includes(needle) || g.phone.includes(needle.replace(/\D/g, "")));
+}
+
+export function findCustomer(slug: string, phone: string): GuestAccount | null {
+  const p = normalizePhone(phone);
+  if (!p) return null;
+  return read().customers.find((c) => c.slug === slug && c.phone === p) ?? null;
+}
+
+export function saveReceipt(receipt: StoredReceipt) {
+  const store = read();
+  store.receipts = [receipt, ...store.receipts.filter((r) => r.id !== receipt.id)].slice(0, 200);
+  write(store);
+}
+
+export function listReceipts(slug: string): StoredReceipt[] {
+  return read().receipts.filter((r) => r.slug === slug).slice(0, 80);
+}
+
+export function getReceipt(id: string): StoredReceipt | null {
+  return read().receipts.find((r) => r.id === id) ?? null;
 }
