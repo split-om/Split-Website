@@ -29,22 +29,40 @@ export function StaffGate({
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(true);
 
   useEffect(() => {
-    const token = readStaffToken(venue.slug);
-    if (!token) {
-      setReady(true);
+    const ua = navigator.userAgent || "";
+    const android = ua.match(/Android (\d+)/);
+    const chrome = ua.match(/Chrome\/(\d+)/);
+    const old =
+      (android && Number(android[1]) < 8) || (chrome && Number(chrome[1]) < 90);
+    if (old && !window.location.pathname.endsWith("/lite")) {
+      window.location.replace(`/venue/${venue.slug}/lite`);
       return;
     }
+    const token = readStaffToken(venue.slug);
+    if (!token) return;
+    let stopped = false;
+    const timer = window.setTimeout(() => {
+      stopped = true;
+      sessionStorage.removeItem(key(venue.slug));
+      setReady(true);
+    }, 6000);
     fetch(`/api/staff?token=${encodeURIComponent(token)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { me?: StaffPublic } | null) => {
+        if (stopped) return;
         if (d?.me) setMe(d.me);
         else sessionStorage.removeItem(key(venue.slug));
-        setReady(true);
       })
-      .catch(() => setReady(true));
+      .catch(() => {
+        if (!stopped) sessionStorage.removeItem(key(venue.slug));
+      })
+      .finally(() => {
+        window.clearTimeout(timer);
+        if (!stopped) setReady(true);
+      });
   }, [venue.slug]);
 
   async function signIn(e: React.FormEvent) {
@@ -120,6 +138,11 @@ export function StaffGate({
         <p className="mt-6 text-xs text-muted">
           Demo: owner <strong>Aisha</strong> / <strong>owner123</strong> (menu + people). Waiter{" "}
           <strong>Noor</strong> / <strong>waiter123</strong> (floor + till only).
+        </p>
+        <p className="mt-4 text-center text-sm">
+          <a href={`/venue/${venue.slug}/lite`} className="font-bold text-split">
+            Sunmi / old tablet? Open simple staff
+          </a>
         </p>
       </div>
     );
