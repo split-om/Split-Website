@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
+import { AddToHomePrompt } from "./AddToHomePrompt";
 import type { StaffAccess, StaffPublic } from "@/lib/staff-types";
 import type { VenueProfile } from "@/lib/venue";
 
@@ -142,6 +143,7 @@ export function StaffGate({
   return (
     <StaffSession.Provider value={{ me, signOut, token: readStaffToken(venue.slug) }}>
       {children}
+      <AddToHomePrompt slug={venue.slug} name={venue.name} />
     </StaffSession.Provider>
   );
 }

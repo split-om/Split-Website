@@ -106,7 +106,6 @@ export function StaffTill({
     } else if (sessionStorage.getItem("split-till-shift") === venue.slug) {
       setFloor("tables");
     }
-    if (!initialDemo && !localStorage.getItem("split-till-pinned")) setShowInstall(true);
   }, [venue.slug, initialDemo]);
 
   useEffect(() => {
