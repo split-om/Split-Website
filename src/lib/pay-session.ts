@@ -13,6 +13,7 @@ export type PayRecord = {
   splitLabel: string;
   gatewaySessionId?: string;
   provider?: string;
+  payerName?: string;
 };
 
 export type TableSession = {

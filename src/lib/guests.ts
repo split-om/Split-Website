@@ -8,6 +8,13 @@ export type GuestAccount = {
   phone: string;
 };
 
+export type Diner = {
+  id: string;
+  name: string;
+  phone: string;
+  passwordHash: string;
+};
+
 export type StoredReceipt = {
   id: string;
   slug: string;

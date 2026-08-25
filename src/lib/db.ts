@@ -105,6 +105,17 @@ export async function ensureSchema() {
     guest_phone TEXT,
     payload JSONB NOT NULL
   )`;
+  await db`CREATE TABLE IF NOT EXISTS diner_users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL
+  )`;
+  await db`CREATE TABLE IF NOT EXISTS diner_tokens (
+    token TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    at TIMESTAMPTZ NOT NULL
+  )`;
   migrated = true;
   return db;
 }

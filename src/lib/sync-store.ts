@@ -8,7 +8,7 @@ import { newId } from "@/lib/id";
 import { menuForVenue, type MenuItem } from "@/lib/menu";
 import { hashPassword, newToken, seedStaff } from "@/lib/staff";
 import { toPublic, type StaffAccess, type StaffPublic, type StaffToken, type StaffUser } from "@/lib/staff-types";
-import { normalizePhone, type GuestAccount, type StoredReceipt } from "@/lib/guests";
+import { normalizePhone, type Diner, type GuestAccount, type StoredReceipt } from "@/lib/guests";
 
 type Store = {
   sessions: Record<string, TableSession>;
@@ -20,6 +20,8 @@ type Store = {
   staffTokens: StaffToken[];
   customers: GuestAccount[];
   receipts: StoredReceipt[];
+  diners: Diner[];
+  dinerTokens: { token: string; userId: string; at: string }[];
 };
 
 const DIR = join(process.cwd(), ".data");
@@ -36,6 +38,8 @@ function empty(): Store {
     staffTokens: [],
     customers: [],
     receipts: [],
+    diners: [],
+    dinerTokens: [],
   };
 }
 
@@ -53,6 +57,8 @@ function read(): Store {
       staffTokens: parsed.staffTokens ?? [],
       customers: parsed.customers ?? [],
       receipts: parsed.receipts ?? [],
+      diners: parsed.diners ?? [],
+      dinerTokens: parsed.dinerTokens ?? [],
     };
   } catch {
     return empty();
@@ -366,4 +372,53 @@ export function listReceipts(slug: string): StoredReceipt[] {
 
 export function getReceipt(id: string): StoredReceipt | null {
   return read().receipts.find((r) => r.id === id) ?? null;
+}
+
+function publicDiner(d: Diner) {
+  return { id: d.id, name: d.name, phone: d.phone };
+}
+
+export function registerDiner(name: string, phone: string, password: string) {
+  const n = name.trim();
+  const p = normalizePhone(phone);
+  if (!n) return { error: "Enter your name." };
+  if (p.length < 8) return { error: "Enter a phone number." };
+  if (!password.trim() || password.trim().length < 4) return { error: "Password must be at least 4 characters." };
+  const store = read();
+  if (store.diners.some((d) => d.phone === p)) return { error: "That phone already has an account. Log in." };
+  const diner: Diner = { id: newId(), name: n, phone: p, passwordHash: hashPassword(password) };
+  const token = newToken();
+  store.diners = [diner, ...store.diners];
+  store.dinerTokens = [{ token, userId: diner.id, at: new Date().toISOString() }, ...store.dinerTokens];
+  write(store);
+  return { user: publicDiner(diner), token };
+}
+
+export function loginDiner(phone: string, password: string) {
+  const p = normalizePhone(phone);
+  const store = read();
+  const diner = store.diners.find((d) => d.phone === p);
+  if (!diner || diner.passwordHash !== hashPassword(password)) return { error: "Wrong phone or password." };
+  const token = newToken();
+  store.dinerTokens = [
+    { token, userId: diner.id, at: new Date().toISOString() },
+    ...store.dinerTokens.filter((t) => t.userId !== diner.id),
+  ];
+  write(store);
+  return { user: publicDiner(diner), token };
+}
+
+export function dinerFromToken(token: string) {
+  if (!token) return null;
+  const store = read();
+  const row = store.dinerTokens.find((t) => t.token === token);
+  if (!row) return null;
+  const diner = store.diners.find((d) => d.id === row.userId);
+  return diner ? publicDiner(diner) : null;
+}
+
+export function logoutDiner(token: string) {
+  const store = read();
+  store.dinerTokens = store.dinerTokens.filter((t) => t.token !== token);
+  write(store);
 }

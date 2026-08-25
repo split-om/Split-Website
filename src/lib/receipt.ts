@@ -49,7 +49,9 @@ export function receiptText(bill: VenueBill, session?: TableSession | null) {
   if (session?.payments.length) {
     rows.push(line("."));
     for (const p of session.payments) {
-      rows.push(pad(methodLabel(p.method).slice(0, 18), formatOMR(p.billBaisa + p.tipBaisa)));
+      rows.push(
+        pad((p.payerName || methodLabel(p.method)).slice(0, 18), formatOMR(p.billBaisa + p.tipBaisa)),
+      );
     }
   }
   rows.push(pad("Paid", formatOMR(paid)));
@@ -82,7 +84,7 @@ export function receiptHtml(bill: VenueBill, session?: TableSession | null) {
   const pays = (session?.payments ?? [])
     .map(
       (p) =>
-        `<div class="row"><span>${escapeHtml(methodLabel(p.method))}</span><span>${formatOMR(p.billBaisa + p.tipBaisa)}</span></div>`,
+        `<div class="row"><span>${escapeHtml(p.payerName || methodLabel(p.method))}</span><span>${formatOMR(p.billBaisa + p.tipBaisa)}</span></div>`,
     )
     .join("");
   return `<!doctype html>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Logo } from "./Logo";
+import { GuestAuth } from "./GuestAuth";
 import { solutions } from "@/lib/data";
 
 const company = [
@@ -89,11 +90,12 @@ export function Header() {
           <span className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-xs font-semibold text-muted">
             🇴🇲 Oman
           </span>
+          <GuestAuth />
           <Link
             href="/join"
             className="rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white hover:bg-split"
           >
-            Join Split
+            Join as a café
           </Link>
         </div>
 
@@ -131,12 +133,15 @@ export function Header() {
               {c.label}
             </Link>
           ))}
+          <div className="mt-3">
+            <GuestAuth />
+          </div>
           <Link
             href="/join"
             onClick={() => setMobile(false)}
             className="mt-3 block rounded-full bg-ink px-5 py-3 text-center text-sm font-semibold text-white"
           >
-            Join Split
+            Join as a café
           </Link>
         </div>
       )}

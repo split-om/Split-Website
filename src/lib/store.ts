@@ -205,6 +205,22 @@ export async function listCustomers(slug: string, q?: string) {
   return useDb() ? pg.listCustomers(slug, q) : file.listCustomers(slug, q);
 }
 
+export async function registerDiner(name: string, phone: string, password: string) {
+  return useDb() ? pg.registerDiner(name, phone, password) : file.registerDiner(name, phone, password);
+}
+
+export async function loginDiner(phone: string, password: string) {
+  return useDb() ? pg.loginDiner(phone, password) : file.loginDiner(phone, password);
+}
+
+export async function dinerFromToken(token: string) {
+  return useDb() ? pg.dinerFromToken(token) : file.dinerFromToken(token);
+}
+
+export async function logoutDiner(token: string) {
+  return useDb() ? pg.logoutDiner(token) : file.logoutDiner(token);
+}
+
 export async function attachGuest(code: string, slug: string, name: string, phone: string) {
   const guest = await upsertCustomer(slug, name, phone);
   if ("error" in guest) return guest;

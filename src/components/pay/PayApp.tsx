@@ -30,6 +30,8 @@ import type { PaymentMethodId } from "@/lib/payments/public";
 import { pushAlert } from "@/lib/staff-alerts";
 import { GuestFrame } from "./GuestFrame";
 import { GuestMenu, type CartLine } from "./GuestMenu";
+import { TableShare } from "./TableShare";
+import { useDiner } from "@/components/GuestAuth";
 import type { MenuItem } from "@/lib/menu";
 
 type Step = "menu" | "bill" | "split" | "tip" | "pay" | "done";
@@ -49,9 +51,9 @@ export function PayApp({ bill: initial, slug }: { bill: VenueBill; slug: string 
     payments: [],
   });
   const [step, setStep] = useState<Step>(initial.items.length ? "bill" : "menu");
+  const diner = useDiner();
 
   useEffect(() => {
-    if (step !== "menu" && step !== "bill") return;
     const pull = () => {
       fetch(`/api/till?code=${encodeURIComponent(bill.code)}`)
         .then((r) => (r.ok ? r.json() : null))
@@ -59,20 +61,31 @@ export function PayApp({ bill: initial, slug }: { bill: VenueBill; slug: string 
           if (d?.bill) setBill(d.bill);
         })
         .catch(() => undefined);
+      fetch(`/api/sync?code=${encodeURIComponent(bill.code)}`)
+        .then((r) => r.json())
+        .then((d: { session?: typeof session }) => {
+          if (d.session) setSession(d.session);
+        })
+        .catch(() => undefined);
     };
-    const id = window.setInterval(pull, 2500);
+    pull();
+    const id = window.setInterval(pull, 1500);
     return () => window.clearInterval(id);
-  }, [bill.code, step]);
+  }, [bill.code]);
 
   useEffect(() => {
-    fetch(`/api/sync?code=${encodeURIComponent(bill.code)}`)
-      .then((r) => r.json())
-      .then((d: { session?: typeof session }) => {
-        if (d.session) setSession(d.session);
-        else setSession(loadSession(bill.code));
+    if (!diner || !slug) return;
+    fetch("/api/guests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, code: bill.code, name: diner.name, phone: diner.phone }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { guest?: { name: string; phone: string } } | null) => {
+        if (d?.guest) setBill((b) => ({ ...b, guestName: d.guest!.name, guestPhone: d.guest!.phone }));
       })
-      .catch(() => setSession(loadSession(bill.code)));
-  }, [bill.code]);
+      .catch(() => undefined);
+  }, [diner?.id, bill.code, slug]);
   const [splitMode, setSplitMode] = useState<SplitMode>("full");
   const [people, setPeople] = useState(2);
   const [selectedQty, setSelectedQty] = useState<Record<string, number>>({});
@@ -199,6 +212,7 @@ export function PayApp({ bill: initial, slug }: { bill: VenueBill; slug: string 
         splitLabel: splitLabel(splitMode, people),
         gatewaySessionId: sessionId,
         provider: method === "restaurant" ? "restaurant" : "amwal",
+        payerName: diner?.name,
       };
       let next = applyPayment(session, payment);
       try {
@@ -359,6 +373,7 @@ export function PayApp({ bill: initial, slug }: { bill: VenueBill; slug: string 
             slug={slug}
             remaining={remaining}
             session={session}
+            dinerName={diner?.name}
             onWaiter={callWaiter}
             onReset={resetDemo}
             onBill={setBill}
@@ -416,6 +431,7 @@ export function PayApp({ bill: initial, slug }: { bill: VenueBill; slug: string 
             bill={bill}
             lastPay={lastPay}
             remaining={remaining}
+            session={session}
             stars={stars}
             setStars={setStars}
             onMore={payMore}
@@ -544,6 +560,7 @@ function BillStep({
   slug,
   remaining,
   session,
+  dinerName,
   onWaiter,
   onReset,
   onOrderMore,
@@ -553,6 +570,7 @@ function BillStep({
   slug: string;
   remaining: number;
   session: TableSession;
+  dinerName?: string;
   onWaiter: () => void;
   onReset: () => void;
   onOrderMore: () => void;
@@ -613,9 +631,14 @@ function BillStep({
         + Order more food
       </button>
 
+      {dinerName ? (
+        <p className="mt-3 rounded-[1.4rem] bg-lilac px-4 py-3 text-sm font-semibold">
+          Paying as {dinerName}. Friends log in too so their names show when they pay.
+        </p>
+      ) : (
       <div className="mt-3 rounded-[1.4rem] bg-white p-4">
         <p className="text-xs font-bold uppercase tracking-wider text-split">Your account</p>
-        <p className="mt-1 text-[11px] text-muted">Save your name so it prints on the receipt.</p>
+        <p className="mt-1 text-[11px] text-muted">Save your name so it prints on the receipt. Or tap Log in at the top.</p>
         <input
           value={guestName}
           onChange={(e) => setGuestName(e.target.value)}
@@ -637,6 +660,11 @@ function BillStep({
           {guestBusy ? "Saving…" : "Save my name"}
         </button>
         {guestNote ? <p className="mt-2 text-xs font-semibold">{guestNote}</p> : null}
+      </div>
+      )}
+
+      <div className="mt-3">
+        <TableShare bill={bill} session={session} remaining={remaining} />
       </div>
 
       <div className="mt-3 overflow-hidden rounded-[1.4rem] bg-white">
@@ -993,6 +1021,7 @@ function DoneStep({
   bill,
   lastPay,
   remaining,
+  session,
   stars,
   setStars,
   onMore,
@@ -1007,6 +1036,7 @@ function DoneStep({
     method: PaymentMethodId;
   };
   remaining: number;
+  session: TableSession;
   stars: number;
   setStars: (n: number) => void;
   onMore: () => void;
@@ -1042,12 +1072,16 @@ function DoneStep({
       ) : null}
 
       {remaining > 0 ? (
-        <div className="mt-4 rounded-[1.4rem] bg-lilac p-4 text-center">
-          <p className="text-sm font-semibold">Still remaining on the table</p>
-          <p className="text-2xl font-extrabold">{formatOMRLabel(remaining)}</p>
-          <button type="button" onClick={onMore} className="mt-3 rounded-full bg-split px-5 py-2 text-sm font-bold text-white">
-            Pay more of this bill
-          </button>
+        <div className="mt-4 space-y-3">
+          <div className="rounded-[1.4rem] bg-lilac p-4 text-center">
+            <p className="text-sm font-semibold">Your share is in. Friends still owe</p>
+            <p className="text-2xl font-extrabold">{formatOMRLabel(remaining)}</p>
+            <p className="mt-1 text-xs text-muted">They scan the same table QR. This screen updates live.</p>
+            <button type="button" onClick={onMore} className="mt-3 rounded-full bg-split px-5 py-2 text-sm font-bold text-white">
+              Pay more of this bill
+            </button>
+          </div>
+          <TableShare bill={bill} session={session} remaining={remaining} />
         </div>
       ) : (
         <p className="mt-4 text-center text-sm font-semibold text-split">The whole table is settled.</p>

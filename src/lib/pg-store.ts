@@ -9,7 +9,7 @@ import { ALL_ACCESS, toPublic, type StaffAccess, type StaffPublic, type StaffUse
 import { ensureSchema, getSql } from "@/lib/db";
 import { venues as catalog, type FloorTable, type VenueProfile } from "@/lib/venue";
 import { slugifyName, tableCountFromRange } from "@/lib/slug";
-import { normalizePhone, type GuestAccount, type StoredReceipt } from "@/lib/guests";
+import { normalizePhone, type Diner, type GuestAccount, type StoredReceipt } from "@/lib/guests";
 
 async function db() {
   const sql = await ensureSchema();
@@ -499,4 +499,51 @@ export async function getReceipt(id: string): Promise<StoredReceipt | null> {
   const sql = await db();
   const rows = await sql`SELECT payload FROM receipts WHERE id = ${id}`;
   return (rows[0]?.payload as StoredReceipt) ?? null;
+}
+
+function publicDiner(row: { id: string; name: string; phone: string }) {
+  return { id: row.id, name: row.name, phone: row.phone };
+}
+
+export async function registerDiner(name: string, phone: string, password: string) {
+  const n = name.trim();
+  const p = normalizePhone(phone);
+  if (!n) return { error: "Enter your name." };
+  if (p.length < 8) return { error: "Enter a phone number." };
+  if (!password.trim() || password.trim().length < 4) return { error: "Password must be at least 4 characters." };
+  const sql = await db();
+  const clash = await sql`SELECT id FROM diner_users WHERE phone = ${p}`;
+  if (clash.length) return { error: "That phone already has an account. Log in." };
+  const diner: Diner = { id: newId(), name: n, phone: p, passwordHash: hashPassword(password) };
+  await sql`INSERT INTO diner_users (id, name, phone, password_hash)
+    VALUES (${diner.id}, ${diner.name}, ${diner.phone}, ${diner.passwordHash})`;
+  const token = newToken();
+  await sql`INSERT INTO diner_tokens (token, user_id, at) VALUES (${token}, ${diner.id}, ${new Date().toISOString()})`;
+  return { user: publicDiner(diner), token };
+}
+
+export async function loginDiner(phone: string, password: string) {
+  const p = normalizePhone(phone);
+  const sql = await db();
+  const rows = await sql`SELECT id, name, phone, password_hash FROM diner_users WHERE phone = ${p}`;
+  const row = rows[0] as { id: string; name: string; phone: string; password_hash: string } | undefined;
+  if (!row || row.password_hash !== hashPassword(password)) return { error: "Wrong phone or password." };
+  const token = newToken();
+  await sql`DELETE FROM diner_tokens WHERE user_id = ${row.id}`;
+  await sql`INSERT INTO diner_tokens (token, user_id, at) VALUES (${token}, ${row.id}, ${new Date().toISOString()})`;
+  return { user: publicDiner(row), token };
+}
+
+export async function dinerFromToken(token: string) {
+  if (!token) return null;
+  const sql = await db();
+  const rows = await sql`SELECT u.id, u.name, u.phone
+    FROM diner_tokens t JOIN diner_users u ON u.id = t.user_id WHERE t.token = ${token}`;
+  const row = rows[0] as { id: string; name: string; phone: string } | undefined;
+  return row ? publicDiner(row) : null;
+}
+
+export async function logoutDiner(token: string) {
+  const sql = await db();
+  await sql`DELETE FROM diner_tokens WHERE token = ${token}`;
 }

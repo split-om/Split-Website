@@ -16,6 +16,19 @@ export function ScanClient() {
 
   const openBill = useCallback(
     (raw: string) => {
+      try {
+        const href = raw.startsWith("http") ? raw : "";
+        if (href) {
+          const path = new URL(href).pathname;
+          const hit = path.match(/\/pay\/([^/]+)/);
+          if (hit?.[1]) {
+            router.push(`/pay/${hit[1]}`);
+            return;
+          }
+        }
+      } catch {
+        /* typed table code */
+      }
       const n = normalizeCode(raw);
       const found = findBill(n);
       if (found) {
